@@ -222,7 +222,8 @@ st.caption(
     "Football Analytics AI V2 | Données fournies par football-data.org"
 )
 
-st.caption(
-    "Les matchs et les données dépendent des compétitions accessibles "
-    avec ton compte API. Aucun pari n'est garanti."
-)
+st.divider()
+
+st.caption("Football Analytics AI V2 - Donnees fournies par football-data.org")
+
+st.caption("Les matchs et les donnees dependent des competitions accessibles avec ton compte API. Aucun pari n'est garanti.")
