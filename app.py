@@ -243,7 +243,8 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
         equipe_dom, saison_courante
     )
     forme_ext, recents_ext = calculer_forme(
-        equipe_ext, saison_courante )
+        equipe_ext, saison_courante 
+    )
 st.subheader("Vérification des 5 derniers matchs")
 st.write("Matchs de l'équipe à domicile")
 st.dataframe(recents_dom)
