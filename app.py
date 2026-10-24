@@ -1,198 +1,156 @@
 
-import streamlit as st
-import requests
-from datetime import date, timedelta
 import math
-from collections import defaultdict
-# -----------------------------
-# 1. CONFIGURATION
-# -----------------------------
+from datetime import date
+
+import pandas as pd
+import requests
+import streamlit as st
+
+
 st.set_page_config(
     page_title="Football Analytics AI V2",
     page_icon="⚽",
-    layout="wide"
+    layout="wide",
 )
 
-BASE_URL = "https://api.football-data.org/v4"
-TIMEOUT = 20
-
 st.title("⚽ Football Analytics AI V2")
-st.write("Consulte les matchs de football à venir.")
+st.write("Analyse statistique du football sans clé API.")
 
-# -----------------------------
-# 2. CONNEXION A L'API
-# -----------------------------
-try:
-    token = str(st.secrets["FOOTBALL_DATA_TOKEN"]).strip()
-except Exception:
-    st.error("Le secret FOOTBALL_DATA_TOKEN est introuvable dans Streamlit.")
-    st.stop()
+LIGUES = {
+    "Angleterre - Premier League": "E0",
+    "Angleterre - Championship": "E1",
+    "Allemagne - Bundesliga": "D1",
+    "Italie - Serie A": "I1",
+    "Espagne - La Liga": "SP1",
+    "France - Ligue 1": "F1",
+    "Pays-Bas - Eredivisie": "N1",
+    "Portugal - Primeira Liga": "P1",
+}
 
-if not token:
-    st.error("Le token API est vide. Vérifie les Secrets de Streamlit.")
-    st.stop()
+SAISONS = {
+    "2025-2026": "2526",
+    "2024-2025": "2425",
+}
 
-HEADERS = {"X-Auth-Token": token}
-
-
-
-def api_get(endpoint, params=None):
-    """Interroge l'API et affiche les erreurs detaillees."""
-    try:
-        url = BASE_URL.rstrip("/") + "/" + endpoint.lstrip("/")
-
-        response = requests.get(
-            url,
-            headers=HEADERS,
-            params=params,
-            timeout=TIMEOUT
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        st.error("Erreur API : HTTP " + str(response.status_code))
-
-        # Afficher le detail de l'erreur renvoyee par l'API
-        detail = response.text[:500]
-        if detail:
-            st.code(detail)
-
-        return None
-
-    except requests.exceptions.Timeout:
-        st.error("Le serveur met trop de temps a repondre.")
-    except requests.exceptions.RequestException as erreur:
-        st.error("Erreur de connexion : " + str(erreur))
-    except ValueError:
-        st.error("La reponse de l'API n'est pas un JSON valide.")
-
-    return None
-
-
-# 
-# -----------------------------
-# MOTEUR D'ANALYSE STATISTIQUE
-# -----------------------------
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def charger_historique(code_competition, debut, fin):
-    """Charge les matchs terminés d'une compétition."""
-    endpoint = "/competitions/" + code_competition + "/matches"
+def charger_donnees(code_ligue, code_saison):
+    url = (
+        "https://www.football-data.co.uk/mmz4281/"
+        + code_saison + "/" + code_ligue + ".csv"
+    )
 
-    try:
-        response = requests.get(
-            BASE_URL + endpoint,
-            headers=HEADERS,
-            params={
-                "dateFrom": debut,
-                "dateTo": fin,
-                "status": "FINISHED",
-                "limit": 500
-            },
-            timeout=TIMEOUT
+    reponse = requests.get(url, timeout=25)
+    reponse.raise_for_status()
+
+    from io import BytesIO
+
+    donnees = pd.read_csv(
+        BytesIO(reponse.content),
+        encoding="latin1",
+        on_bad_lines="skip",
+    )
+
+    colonnes = ["HomeTeam", "AwayTeam", "FTHG", "FTAG"]
+    if not all(c in donnees.columns for c in colonnes):
+        raise ValueError(
+            "Le fichier reçu ne contient pas les colonnes attendues."
         )
 
-        if response.status_code != 200:
-            return []
+    donnees = donnees[colonnes].copy()
+    donnees["FTHG"] = pd.to_numeric(
+        donnees["FTHG"], errors="coerce"
+    )
+    donnees["FTAG"] = pd.to_numeric(
+        donnees["FTAG"], errors="coerce"
+    )
 
-        return response.json().get("matches", [])
+    donnees = donnees.dropna(
+        subset=["HomeTeam", "AwayTeam", "FTHG", "FTAG"]
+    )
 
-    except requests.exceptions.RequestException:
-        return []
-
-
-def calculer_moyennes(equipe, historique):
-    """Calcule les buts marqués et encaissés."""
-    stats = {
-        "domicile": {"marques": 0, "encaisses": 0, "matchs": 0},
-        "exterieur": {"marques": 0, "encaisses": 0, "matchs": 0}
-    }
-
-    for match in historique:
-        if match.get("status") != "FINISHED":
-            continue
-
-        domicile = (match.get("homeTeam") or {}).get("name")
-        exterieur = (match.get("awayTeam") or {}).get("name")
-        score = match.get("score", {}).get("fullTime", {})
-
-        buts_dom = score.get("home")
-        buts_ext = score.get("away")
-
-        if buts_dom is None or buts_ext is None:
-            continue
-
-        if domicile == equipe:
-            bloc = stats["domicile"]
-            bloc["marques"] += buts_dom
-            bloc["encaisses"] += buts_ext
-            bloc["matchs"] += 1
-
-        if exterieur == equipe:
-            bloc = stats["exterieur"]
-            bloc["marques"] += buts_ext
-            bloc["encaisses"] += buts_dom
-            bloc["matchs"] += 1
-
-    return stats
+    return donnees
 
 
-def probabilite_poisson(k, lam):
-    """Estime la probabilité de k buts."""
-    return math.exp(-lam) * (lam ** k) / math.factorial(k)
-
-
-def analyser_match(equipe_dom, equipe_ext, historique):
-    """Calcule les probabilités principales."""
-    stats_dom = calculer_moyennes(equipe_dom, historique)
-    stats_ext = calculer_moyennes(equipe_ext, historique)
-
-    dom = stats_dom["domicile"]
-    ext = stats_ext["exterieur"]
-
-    if dom["matchs"] < 3 or ext["matchs"] < 3:
-        return {
-            "erreur": (
-                "Historique insuffisant : au moins 3 matchs "
-                "à domicile et 3 à l'extérieur sont nécessaires."
-            )
-        }
-
-    moyenne_dom = dom["marques"] / dom["matchs"]
-    defense_dom = dom["encaisses"] / dom["matchs"]
-    moyenne_ext = ext["marques"] / ext["matchs"]
-    defense_ext = ext["encaisses"] / ext["matchs"]
-
-    lambda_dom = (moyenne_dom + defense_ext) / 2
-    lambda_ext = (moyenne_ext + defense_dom) / 2
-
-    scores = []
-
-    for b1 in range(11):
-        for b2 in range(11):
-            p1 = probabilite_poisson(b1, lambda_dom)
-            p2 = probabilite_poisson(b2, lambda_ext)
-            scores.append((b1, b2, p1 * p2))
-
-    total = sum(p for _, _, p in scores)
-
-    scores = [
-        (b1, b2, p / total)
-        for b1, b2, p in scores
-    ]
-
-    victoire_dom = sum(p for b1, b2, p in scores if b1 > b2)
-    nul = sum(p for b1, b2, p in scores if b1 == b2)
-    victoire_ext = sum(p for b1, b2, p in scores if b1 < b2)
-    over25 = sum(p for b1, b2, p in scores if b1 + b2 >= 3)
-    btts = sum(p for b1, b2, p in scores if b1 >= 1 and b2 >= 1)
+def moyenne_buts(equipe, matchs):
+    domicile = matchs[matchs["HomeTeam"] == equipe]
+    exterieur = matchs[matchs["AwayTeam"] == equipe]
 
     return {
-        "erreur": None,
-        "1": victoire_dom,
-        "N": nul,
-        "2": victoire_ext,
+        "dom": len(domicile),
+        "ext": len(exterieur),
+        "buts_dom": domicile["FTHG"].mean(),
+        "encaisses_dom": domicile["FTAG"].mean(),
+        "buts_ext": exterieur["FTAG"].mean(),
+        "encaisses_ext": exterieur["FTHG"].mean(),
+    }
+
+
+def poisson(k, moyenne):
+    if moyenne <= 0:
+        return 1.0 if k == 0 else 0.0
+    return math.exp(-moyenne) * moyenne**k / math.factorial(k)
+
+
+def analyser(equipe_dom, equipe_ext, matchs):
+    stats_dom = moyenne_buts(equipe_dom, matchs)
+    stats_ext = moyenne_buts(equipe_ext, matchs)
+
+    if stats_dom["dom"] < 3 or stats_ext["ext"] < 3:
+        return None, (
+            "Historique insuffisant : il faut au moins "
+            "3 matchs à domicile pour la première équipe "
+            "et 3 matchs à l'extérieur pour la seconde."
+        )
+
+    moyenne_ligue_dom = matchs["FTHG"].mean()
+    moyenne_ligue_ext = matchs["FTAG"].mean()
+
+    if pd.isna(moyenne_ligue_dom) or pd.isna(moyenne_ligue_ext):
+        return None, "Les moyennes de buts ne sont pas disponibles."
+
+    attaque_dom = stats_dom["buts_dom"] / max(moyenne_ligue_dom, 0.1)
+    defense_ext = stats_ext["encaisses_ext"] / max(moyenne_ligue_dom, 0.1)
+
+    attaque_ext = stats_ext["buts_ext"] / max(moyenne_ligue_ext, 0.1)
+    defense_dom = stats_dom["encaisses_dom"] / max(moyenne_ligue_ext, 0.1)
+
+    lambda_dom = max(
+        0.05,
+        moyenne_ligue_dom * (attaque_dom + defense_ext) / 2,
+    )
+    lambda_ext = max(
+        0.05,
+        moyenne_ligue_ext * (attaque_ext + defense_dom) / 2,
+    )
+
+    scores = []
+    for buts_dom in range(11):
+        for buts_ext in range(11):
+            probabilite = (
+                poisson(buts_dom, lambda_dom)
+                * poisson(buts_ext, lambda_ext)
+            )
+            scores.append((buts_dom, buts_ext, probabilite))
+
+    total = sum(p for _, _, p in scores)
+    if total <= 0:
+        return None, "Impossible de calculer les probabilités."
+
+    scores = [
+        (a, b, p / total) for a, b, p in scores
+    ]
+
+    p1 = sum(p for a, b, p in scores if a > b)
+    pn = sum(p for a, b, p in scores if a == b)
+    p2 = sum(p for a, b, p in scores if a < b)
+    over25 = sum(p for a, b, p in scores if a + b >= 3)
+    btts = sum(p for a, b, p in scores if a >= 1 and b >= 1)
+
+    return {
+        "1": p1,
+        "N": pn,
+        "2": p2,
         "over25": over25,
         "under25": 1 - over25,
         "btts": btts,
@@ -200,258 +158,141 @@ def analyser_match(equipe_dom, equipe_ext, historique):
         "lambda_ext": lambda_ext,
         "scores": sorted(
             scores, key=lambda x: x[2], reverse=True
-        )[:5]
-    }
-# -----------------------------
-# 3. CHOIX DES DATES
-# -----------------------------
-aujourd_hui = date.today()
+        )[:5],
+        "stats_dom": stats_dom,
+        "stats_ext": stats_ext,
+    }, None
 
-colonne1, colonne2 = st.columns(2)
 
-with colonne1:
-    date_debut = st.date_input(
-        "Date de début",
-        value=aujourd_hui
+st.divider()
+st.subheader("1. Choisir les données")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    ligue = st.selectbox("Championnat", list(LIGUES.keys()))
+
+with col2:
+    saison = st.selectbox("Saison historique", list(SAISONS.keys()))
+
+if st.button("📥 Charger les résultats", type="primary"):
+    st.cache_data.clear()
+
+try:
+    with st.spinner("Chargement des résultats historiques..."):
+        matchs = charger_donnees(
+            LIGUES[ligue],
+            SAISONS[saison],
+        )
+except Exception as erreur:
+    st.error(
+        "Impossible de récupérer ce fichier de résultats. "
+        "Vérifie ta connexion ou essaie une autre saison."
     )
-
-with colonne2:
-    date_fin = st.date_input(
-        "Date de fin",
-        value=aujourd_hui + timedelta(days=7)
-    )
-
-if date_fin < date_debut:
-    st.error("La date de fin doit être égale ou postérieure à la date de début.")
+    st.caption("Détail technique : " + str(erreur))
     st.stop()
 
-# -----------------------------
-# 4. CHARGEMENT DES COMPETITIONS
-# -----------------------------
-with st.spinner("Chargement des compétitions..."):
-    donnees_competitions = api_get("/competitions")
-
-if donnees_competitions is None:
-    st.warning("Impossible de charger les compétitions.")
+if matchs.empty:
+    st.warning("Aucun résultat terminé disponible dans ce fichier.")
     st.stop()
 
-competitions = donnees_competitions.get("competitions", [])
+st.success("Résultats historiques chargés.")
 
-options_competitions = {"Toutes les compétitions accessibles": ""}
+c1, c2, c3 = st.columns(3)
+c1.metric("Matchs historiques", len(matchs))
+c2.metric("Équipes trouvées", len(set(matchs["HomeTeam"]) | set(matchs["AwayTeam"])))
+c3.metric("Saison", saison)
 
-for competition in competitions:
-    code = competition.get("code")
-    nom = competition.get("name", "Compétition inconnue")
-    pays = (competition.get("area") or {}).get("name", "")
+st.divider()
+st.subheader("2. Analyser un match")
 
-    if code:
-        if pays:
-            libelle = nom + " - " + pays
-        else:
-            libelle = nom
-
-        options_competitions[libelle] = code
-
-if len(options_competitions) == 1:
-    st.warning("Aucune compétition exploitable n'a été trouvée.")
-    st.stop()
-
-choix_competition = st.selectbox(
-    "Choisir une compétition",
-    list(options_competitions.keys())
+equipes = sorted(
+    set(matchs["HomeTeam"].dropna())
+    | set(matchs["AwayTeam"].dropna())
 )
 
-code_competition = options_competitions[choix_competition]
-
-# -----------------------------
-# 5. RECHERCHE DES MATCHS
-# -----------------------------
-parametres = {
-    "dateFrom": date_debut.isoformat(),
-    "dateTo": date_fin.isoformat()
-}
-
-if code_competition:
-    endpoint_matchs = "/competitions/" + code_competition + "/matches"
-else:
-    endpoint_matchs = "/matches"
-
-with st.spinner("Recherche des matchs..."):
-    donnees_matchs = api_get(endpoint_matchs, parametres)
-
-if donnees_matchs is None:
-    st.info("Essaie une autre compétition ou une autre période.")
+if len(equipes) < 2:
+    st.warning("Pas assez d'équipes dans les données.")
     st.stop()
 
-matchs = donnees_matchs.get("matches", [])
+col1, col2 = st.columns(2)
 
-matchs_a_venir = []
+with col1:
+    equipe_dom = st.selectbox(
+        "Équipe à domicile",
+        equipes,
+        index=0,
+    )
 
-for match in matchs:
-    statut = match.get("status", "")
+with col2:
+    equipe_ext = st.selectbox(
+        "Équipe à l'extérieur",
+        equipes,
+        index=1,
+    )
 
-    if statut in ["SCHEDULED", "TIMED"]:
-        matchs_a_venir.append(match)
+if equipe_dom == equipe_ext:
+    st.warning("Choisis deux équipes différentes.")
+elif st.button("📊 Calculer les probabilités", type="primary"):
+    resultat, erreur = analyser(equipe_dom, equipe_ext, matchs)
 
-matchs_a_venir.sort(key=lambda match: match.get("utcDate", ""))
+    if erreur:
+        st.warning(erreur)
+    else:
+        st.subheader("3. Probabilités estimées")
 
-# -----------------------------
-# 6. RESUME
-# -----------------------------
-st.divider()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("1 - Victoire domicile", f'{resultat["1"]:.1%}')
+        c2.metric("N - Match nul", f'{resultat["N"]:.1%}')
+        c3.metric("2 - Victoire extérieur", f'{resultat["2"]:.1%}')
 
-colonne1, colonne2, colonne3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Plus de 2,5 buts", f'{resultat["over25"]:.1%}')
+        c2.metric("Moins de 2,5 buts", f'{resultat["under25"]:.1%}')
+        c3.metric("Les deux équipes marquent", f'{resultat["btts"]:.1%}')
 
-colonne1.metric("Matchs trouvés", len(matchs))
-colonne2.metric("Matchs à venir", len(matchs_a_venir))
-colonne3.metric("Compétitions accessibles", len(competitions))
+        st.subheader("4. Scores les plus probables")
 
-# -----------------------------
-# 7. AFFICHAGE DES MATCHS ET ANALYSES
-# -----------------------------
-
-st.subheader("📅 Calendrier et analyse des matchs")
-
-if not matchs_a_venir:
-    st.info("Aucun match à venir trouvé pour ces dates.")
-else:
-    for match in matchs_a_venir:
-        competition = (match.get("competition") or {}).get(
-            "name", "Compétition inconnue"
-        )
-
-        equipe_domicile = (match.get("homeTeam") or {}).get(
-            "name", "Équipe inconnue"
-        )
-
-        equipe_exterieure = (match.get("awayTeam") or {}).get(
-            "name", "Équipe inconnue"
-        )
-
-        date_utc = match.get("utcDate", "")
-
-        if date_utc:
-            date_affichee = date_utc[:10]
-            heure_affichee = date_utc[11:16] + " UTC"
-        else:
-            date_affichee = "Date inconnue"
-            heure_affichee = "Heure inconnue"
-
-        with st.container(border=True):
-            st.caption(
-                competition + " | " + date_affichee
-                + " | " + heure_affichee
+        for buts_dom, buts_ext, proba in resultat["scores"]:
+            st.write(
+                f"**{equipe_dom} {buts_dom} - {buts_ext} "
+                f"{equipe_ext}** — {proba:.1%}"
             )
 
-            st.markdown(
-                "**" + equipe_domicile + " - "
-                + equipe_exterieure + "**"
-            )
+        st.subheader("5. Moyennes historiques utilisées")
 
-            st.caption("Match à venir")
+        c1, c2 = st.columns(2)
+        c1.write("**" + equipe_dom + " à domicile**")
+        c1.write(f"Matchs : {resultat['stats_dom']['dom']}")
+        c1.write(
+            f"Buts marqués par match : "
+            f"{resultat['stats_dom']['buts_dom']:.2f}"
+        )
+        c1.write(
+            f"Buts encaissés par match : "
+            f"{resultat['stats_dom']['encaisses_dom']:.2f}"
+        )
 
-            if st.button(
-                "📊 Analyser ce match",
-                key="analyse_" + str(match.get("id"))
-            ):
-                debut_historique = (
-                    date_debut - timedelta(days=365)
-                ).isoformat()
+        c2.write("**" + equipe_ext + " à l'extérieur**")
+        c2.write(f"Matchs : {resultat['stats_ext']['ext']}")
+        c2.write(
+            f"Buts marqués par match : "
+            f"{resultat['stats_ext']['buts_ext']:.2f}"
+        )
+        c2.write(
+            f"Buts encaissés par match : "
+            f"{resultat['stats_ext']['encaisses_ext']:.2f}"
+        )
 
-                fin_historique = (
-                    date_debut - timedelta(days=1)
-                ).isoformat()
+        st.info(
+            "Ces probabilités sont des estimations mathématiques "
+            "basées sur les résultats historiques de la saison choisie. "
+            "Ce ne sont pas des données en direct et elles ne garantissent "
+            "pas le résultat d'un match."
+        )
 
-                with st.spinner(
-                    "Chargement de l'historique et calcul..."
-                ):
-                    if code_competition:
-                        historique = charger_historique(
-                            code_competition,
-                            debut_historique,
-                            fin_historique
-                        )
-                    else:
-                        historique = []
-
-                if not historique:
-                    st.warning(
-                        "Historique indisponible pour cette "
-                        "compétition. Choisis une compétition "
-                        "précise pour tenter l'analyse."
-                    )
-                else:
-                    resultat = analyser_match(
-                        equipe_domicile,
-                        equipe_exterieure,
-                        historique
-                    )
-
-                    if resultat.get("erreur"):
-                        st.warning(resultat["erreur"])
-                    else:
-                        st.markdown("### 📈 Probabilités estimées")
-
-                        c1, c2, c3 = st.columns(3)
-
-                        c1.metric(
-                            "1 - Victoire domicile",
-                            f'{resultat["1"]:.1%}'
-                        )
-
-                        c2.metric(
-                            "N - Match nul",
-                            f'{resultat["N"]:.1%}'
-                        )
-
-                        c3.metric(
-                            "2 - Victoire extérieur",
-                            f'{resultat["2"]:.1%}'
-                        )
-
-                        c4, c5, c6 = st.columns(3)
-
-                        c4.metric(
-                            "Over 2.5 buts",
-                            f'{resultat["over25"]:.1%}'
-                        )
-
-                        c5.metric(
-                            "Under 2.5 buts",
-                            f'{resultat["under25"]:.1%}'
-                        )
-
-                        c6.metric(
-                            "BTTS - Les deux marquent",
-                            f'{resultat["btts"]:.1%}'
-                        )
-
-                        st.markdown("### ⚽ Scores les plus probables")
-
-                        for buts_dom, buts_ext, proba in resultat["scores"]:
-                            st.write(
-                                str(buts_dom) + " - "
-                                + str(buts_ext)
-                                + " : " + f"{proba:.1%}"
-                            )
-
-                        st.caption(
-                            "Estimations statistiques fondées sur "
-                            "les résultats historiques disponibles. "
-                            "Elles ne garantissent aucun résultat."
-                        )
-
-# -----------------------------
-# 8. FIN DE PAGE
-# -----------------------------
 st.divider()
-
 st.caption(
-    "Football Analytics AI V2 | Données fournies par football-data.org"
+    "Football Analytics AI V2 | Résultats historiques : "
+    "Football-Data.co.uk | Aucun pari n'est garanti."
 )
-
-st.divider()
-
-st.caption("Football Analytics AI V2 - Donnees fournies par football-data.org")
-
-st.caption("Les matchs et les donnees dependent des competitions accessibles avec ton compte API. Aucun pari n'est garanti.")
