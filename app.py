@@ -307,9 +307,12 @@ colonne2.metric("Matchs à venir", len(matchs_a_venir))
 colonne3.metric("Compétitions accessibles", len(competitions))
 
 # -----------------------------
-# 7. AFFICHAGE DES MATCHS
+# 
 # -----------------------------
-st.subheader("📅 Calendrier des matchs")
+# 7. AFFICHAGE DES MATCHS ET ANALYSES
+# -----------------------------
+
+st.subheader("📅 Calendrier et analyse des matchs")
 
 if not matchs_a_venir:
     st.info("Aucun match à venir trouvé pour ces dates.")
@@ -338,14 +341,106 @@ else:
 
         with st.container(border=True):
             st.caption(
-                competition + " | " + date_affichee + " | " + heure_affichee
+                competition + " | " + date_affichee
+                + " | " + heure_affichee
             )
 
             st.markdown(
-                "**" + equipe_domicile + " - " + equipe_exterieure + "**"
+                "**" + equipe_domicile + " - "
+                + equipe_exterieure + "**"
             )
 
             st.caption("Match à venir")
+
+            if st.button(
+                "📊 Analyser ce match",
+                key="analyse_" + str(match.get("id"))
+            ):
+                debut_historique = (
+                    date_debut - timedelta(days=365)
+                ).isoformat()
+
+                fin_historique = (
+                    date_debut - timedelta(days=1)
+                ).isoformat()
+
+                with st.spinner(
+                    "Chargement de l'historique et calcul..."
+                ):
+                    if code_competition:
+                        historique = charger_historique(
+                            code_competition,
+                            debut_historique,
+                            fin_historique
+                        )
+                    else:
+                        historique = []
+
+                if not historique:
+                    st.warning(
+                        "Historique indisponible pour cette "
+                        "compétition. Choisis une compétition "
+                        "précise pour tenter l'analyse."
+                    )
+                else:
+                    resultat = analyser_match(
+                        equipe_domicile,
+                        equipe_exterieure,
+                        historique
+                    )
+
+                    if resultat.get("erreur"):
+                        st.warning(resultat["erreur"])
+                    else:
+                        st.markdown("### 📈 Probabilités estimées")
+
+                        c1, c2, c3 = st.columns(3)
+
+                        c1.metric(
+                            "1 - Victoire domicile",
+                            f'{resultat["1"]:.1%}'
+                        )
+
+                        c2.metric(
+                            "N - Match nul",
+                            f'{resultat["N"]:.1%}'
+                        )
+
+                        c3.metric(
+                            "2 - Victoire extérieur",
+                            f'{resultat["2"]:.1%}'
+                        )
+
+                        c4, c5, c6 = st.columns(3)
+
+                        c4.metric(
+                            "Over 2.5 buts",
+                            f'{resultat["over25"]:.1%}'
+                        )
+
+                        c5.metric(
+                            "Under 2.5 buts",
+                            f'{resultat["under25"]:.1%}'
+                        )
+
+                        c6.metric(
+                            "BTTS - Les deux marquent",
+                            f'{resultat["btts"]:.1%}'
+                        )
+
+                        st.markdown("### ⚽ Scores les plus probables")
+
+                        for buts_dom, buts_ext, proba in resultat["scores"]:
+                            st.write(
+                                str(buts_dom) + " - "
+                                + str(buts_ext)
+                                + " : " + f"{proba:.1%}"
+                            )
+
+                        st.caption(
+                            "Estimations statistiques fondées sur "
+                            "les résultats historiques disponibles. "
+                            "Elles ne garantissent aucun résultat."
 
 # -----------------------------
 # 8. FIN DE PAGE
