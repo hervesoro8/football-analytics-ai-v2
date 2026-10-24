@@ -8,13 +8,16 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="Football Analytics AI V2.2",
+    page_title="Football Analytics AI V2.3",
     page_icon="⚽",
     layout="wide",
 )
 
-st.title("⚽ Football Analytics AI V2.2")
-st.write("Historique combiné, forme récente et probabilités estimées.")
+st.title("⚽ Football Analytics AI V2.3")
+st.write(
+    "Analyse statistique des équipes, forme récente et "
+    "probabilités estimées."
+)
 
 LIGUES = {
     "Angleterre - Premier League": "E0",
@@ -60,42 +63,71 @@ def charger_donnees(code_ligue, code_saison):
     if not all(c in donnees.columns for c in obligatoires):
         raise ValueError("Colonnes de résultats manquantes.")
 
-    colonnes = obligatoires.copy()
-    if "Date" in donnees.columns:
-        colonnes.append("Date")
-
-    donnees = donnees[colonnes].copy()
-    donnees["FTHG"] = pd.to_numeric(donnees["FTHG"], errors="coerce")
-    donnees["FTAG"] = pd.to_numeric(donnees["FTAG"], errors="coerce")
-    donnees = donnees.dropna(subset=obligatoires).copy()
-    donnees["FTHG"] = donnees["FTHG"].astype(int)
-    donnees["FTAG"] = donnees["FTAG"].astype(int)
-
-    if "Date" in donnees.columns:
+    if "Date" not in donnees.columns:
+        donnees["Date"] = pd.NaT
+    else:
         donnees["Date"] = pd.to_datetime(
             donnees["Date"], dayfirst=True, errors="coerce"
         )
-    else:
-        donnees["Date"] = pd.NaT
 
-    donnees = donnees.sort_values(
-        "Date", na_position="first"
-    ).reset_index(drop=True)
+    donnees["FTHG"] = pd.to_numeric(
+        donnees["FTHG"], errors="coerce"
+    )
+    donnees["FTAG"] = pd.to_numeric(
+        donnees["FTAG"], errors="coerce"
+    )
+
+    donnees = donnees.dropna(
+        subset=obligatoires + ["Date"]
+    ).copy()
+
+    donnees["FTHG"] = donnees["FTHG"].astype(int)
+    donnees["FTAG"] = donnees["FTAG"].astype(int)
+
+    # Les rencontres sans date fiable sont exclues.
+    donnees = donnees.sort_values("Date").reset_index(drop=True)
 
     return donnees
 
 
+def poids_recence(matchs, demi_vie_jours=180):
+    """Poids élevé pour les matchs récents."""
+    if matchs.empty:
+        return pd.Series(dtype=float, index=matchs.index)
+
+    date_max = matchs["Date"].max()
+    age_jours = (date_max - matchs["Date"]).dt.days.clip(lower=0)
+
+    return 0.5 ** (age_jours / demi_vie_jours)
+
+
+def moyenne_ponderee(valeurs, poids):
+    valeurs = pd.to_numeric(valeurs, errors="coerce")
+    masque = valeurs.notna() & poids.notna()
+
+    if not masque.any() or poids[masque].sum() <= 0:
+        return float("nan")
+
+    return float(
+        (valeurs[masque] * poids[masque]).sum()
+        / poids[masque].sum()
+    )
+
+
 def moyenne_buts(equipe, matchs):
-    dom = matchs[matchs["HomeTeam"] == equipe]
-    ext = matchs[matchs["AwayTeam"] == equipe]
+    dom = matchs[matchs["HomeTeam"] == equipe].copy()
+    ext = matchs[matchs["AwayTeam"] == equipe].copy()
+
+    poids_dom = poids_recence(dom)
+    poids_ext = poids_recence(ext)
 
     return {
         "dom": len(dom),
         "ext": len(ext),
-        "buts_dom": dom["FTHG"].mean(),
-        "encaisses_dom": dom["FTAG"].mean(),
-        "buts_ext": ext["FTAG"].mean(),
-        "encaisses_ext": ext["FTHG"].mean(),
+        "buts_dom": moyenne_ponderee(dom["FTHG"], poids_dom),
+        "encaisses_dom": moyenne_ponderee(dom["FTAG"], poids_dom),
+        "buts_ext": moyenne_ponderee(ext["FTAG"], poids_ext),
+        "encaisses_ext": moyenne_ponderee(ext["FTHG"], poids_ext),
     }
 
 
@@ -113,19 +145,22 @@ def derniers_matchs(equipe, matchs, nombre=5):
 
     colonnes = [
         "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG",
-        "ButsPour", "ButsContre", "Lieu"
+        "ButsPour", "ButsContre", "Lieu",
     ]
 
     historique = pd.concat(
         [dom[colonnes], ext[colonnes]], ignore_index=True
     )
 
-    historique = historique.dropna(subset=["ButsPour", "ButsContre"])
-    historique = historique.sort_values(
-        "Date", na_position="first"
+    historique = historique.dropna(
+        subset=["Date", "ButsPour", "ButsContre"]
     )
 
-    return historique.tail(nombre).iloc[::-1].reset_index(drop=True)
+    historique = historique.sort_values(
+        "Date", ascending=False
+    )
+
+    return historique.head(nombre).reset_index(drop=True)
 
 
 def calculer_forme(equipe, matchs):
@@ -134,10 +169,12 @@ def calculer_forme(equipe, matchs):
     if recents.empty:
         return None, recents
 
+    poids = poids_recence(recents, demi_vie_jours=60)
+
     stats = {
         "nombre": len(recents),
-        "buts_pour": recents["ButsPour"].mean(),
-        "buts_contre": recents["ButsContre"].mean(),
+        "buts_pour": moyenne_ponderee(recents["ButsPour"], poids),
+        "buts_contre": moyenne_ponderee(recents["ButsContre"], poids),
         "victoires": int(
             (recents["ButsPour"] > recents["ButsContre"]).sum()
         ),
@@ -155,6 +192,7 @@ def calculer_forme(equipe, matchs):
 def poisson(k, moyenne):
     if moyenne <= 0:
         return 1.0 if k == 0 else 0.0
+
     return math.exp(-moyenne) * moyenne**k / math.factorial(k)
 
 
@@ -169,13 +207,26 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
             "à l'extérieur pour l'équipe visiteuse."
         )
 
-    moy_dom_ligue = historique["FTHG"].mean()
-    moy_ext_ligue = historique["FTAG"].mean()
+    moy_dom_ligue = moyenne_ponderee(
+        historique["FTHG"], poids_recence(historique)
+    )
+    moy_ext_ligue = moyenne_ponderee(
+        historique["FTAG"], poids_recence(historique)
+    )
 
-    if pd.isna(moy_dom_ligue) or pd.isna(moy_ext_ligue):
-        return None, "Moyennes de buts indisponibles."
+    valeurs = [
+        stats_dom["buts_dom"],
+        stats_dom["encaisses_dom"],
+        stats_ext["buts_ext"],
+        stats_ext["encaisses_ext"],
+        moy_dom_ligue,
+        moy_ext_ligue,
+    ]
 
-    # Prévision de référence fondée sur les données combinées.
+    if any(pd.isna(v) for v in valeurs):
+        return None, "Certaines moyennes sont indisponibles."
+
+    # Estimation historique pondérée par la récence.
     attaque_dom = stats_dom["buts_dom"] / max(moy_dom_ligue, 0.1)
     defense_ext = stats_ext["encaisses_ext"] / max(moy_dom_ligue, 0.1)
     attaque_ext = stats_ext["buts_ext"] / max(moy_ext_ligue, 0.1)
@@ -188,14 +239,16 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
         0.05, moy_ext_ligue * (attaque_ext + defense_dom) / 2
     )
 
-    # La forme récente vient uniquement de la saison sélectionnée.
-    forme_dom, recents_dom = calculer_forme(equipe_dom, saison_courante)
-    forme_ext, recents_ext = calculer_forme(equipe_ext, saison_courante)
+    forme_dom, recents_dom = calculer_forme(
+        equipe_dom, saison_courante
+    )
+    forme_ext, recents_ext = calculer_forme(
+        equipe_ext, saison_courante
+    )
 
     lambda_dom = lambda_dom_hist
     lambda_ext = lambda_ext_hist
     forme_utilisee = False
-    poids_forme = 0.30
 
     if (
         forme_dom is not None
@@ -210,27 +263,22 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
             forme_ext["buts_pour"] + forme_dom["buts_contre"]
         ) / 2
 
-        lambda_dom = (
-            (1 - poids_forme) * lambda_dom_hist
-            + poids_forme * recent_dom
-        )
-        lambda_ext = (
-            (1 - poids_forme) * lambda_ext_hist
-            + poids_forme * recent_ext
-        )
+        # La forme récente compte pour 35 %.
+        lambda_dom = 0.65 * lambda_dom_hist + 0.35 * recent_dom
+        lambda_ext = 0.65 * lambda_ext_hist + 0.35 * recent_ext
 
-        lambda_dom = max(0.05, lambda_dom)
-        lambda_ext = max(0.05, lambda_ext)
+        lambda_dom = max(0.05, min(lambda_dom, 5.0))
+        lambda_ext = max(0.05, min(lambda_ext, 5.0))
         forme_utilisee = True
 
     scores = []
     for buts_dom in range(11):
         for buts_ext in range(11):
-            p = (
+            probabilite = (
                 poisson(buts_dom, lambda_dom)
                 * poisson(buts_ext, lambda_ext)
             )
-            scores.append((buts_dom, buts_ext, p))
+            scores.append((buts_dom, buts_ext, probabilite))
 
     total = sum(p for _, _, p in scores)
     if total <= 0:
@@ -243,6 +291,15 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
     p2 = sum(p for a, b, p in scores if a < b)
     over25 = sum(p for a, b, p in scores if a + b >= 3)
     btts = sum(p for a, b, p in scores if a >= 1 and b >= 1)
+
+    # Indicateur de quantité de données, pas une garantie d'exactitude.
+    nombre_donnees = min(stats_dom["dom"], stats_ext["ext"])
+    if nombre_donnees >= 15:
+        fiabilite = "Historique fourni"
+    elif nombre_donnees >= 8:
+        fiabilite = "Historique moyen"
+    else:
+        fiabilite = "Historique limité"
 
     return {
         "1": p1,
@@ -260,6 +317,7 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
         "recents_ext": recents_ext,
         "stats_dom": stats_dom,
         "stats_ext": stats_ext,
+        "fiabilite": fiabilite,
         "scores": sorted(scores, key=lambda x: x[2], reverse=True)[:5],
     }, None
 
@@ -277,13 +335,13 @@ if st.button("🔄 Actualiser les données"):
     charger_donnees.clear()
 
 try:
-    with st.spinner("Chargement des résultats..."):
+    with st.spinner("Chargement des résultats historiques..."):
         matchs_saison = charger_donnees(
             LIGUES[ligue], SAISONS[saison]
         )
 
-        saison_prec = SAISON_PRECEDENTE[saison]
         historique = matchs_saison.copy()
+        saison_prec = SAISON_PRECEDENTE[saison]
 
         if saison_prec:
             try:
@@ -293,11 +351,12 @@ try:
                 historique = pd.concat(
                     [matchs_prec, matchs_saison],
                     ignore_index=True,
-                )
+                ).sort_values("Date").reset_index(drop=True)
+
             except Exception:
                 st.warning(
                     "La saison précédente n'a pas pu être chargée. "
-                    "Les calculs utiliseront uniquement la saison choisie."
+                    "Les calculs utilisent la saison sélectionnée."
                 )
 
 except Exception as erreur:
@@ -306,7 +365,10 @@ except Exception as erreur:
     st.stop()
 
 if matchs_saison.empty:
-    st.warning("Aucun résultat terminé dans la saison choisie.")
+    st.warning(
+        "Aucun résultat terminé et daté dans cette saison. "
+        "Essaie une autre saison ou actualise plus tard."
+    )
     st.stop()
 
 st.success("Données chargées.")
@@ -317,21 +379,22 @@ c2.metric(
     "Équipes trouvées",
     len(set(matchs_saison["HomeTeam"]) | set(matchs_saison["AwayTeam"]))
 )
-c3.metric("Matchs pour l'historique", len(historique))
+c3.metric("Matchs historiques", len(historique))
 
 dates = matchs_saison["Date"].dropna()
 if not dates.empty:
     st.caption(
-        "Saison sélectionnée : "
+        "Dates disponibles : "
         + dates.min().strftime("%d/%m/%Y")
         + " au "
         + dates.max().strftime("%d/%m/%Y")
     )
 
-st.caption(
-    "Les moyennes de référence utilisent la saison sélectionnée "
-    "et, si disponible, la saison précédente. La forme récente "
-    "utilise uniquement la saison sélectionnée."
+st.info(
+    "Les fichiers contiennent des résultats historiques. "
+    "Ils ne confirment pas à eux seuls qu'un match est programmé demain. "
+    "Les pondérations sont des choix de modèle, pas des preuves "
+    "d'une meilleure précision."
 )
 
 st.divider()
@@ -347,18 +410,27 @@ if len(equipes) < 2:
     st.stop()
 
 c1, c2 = st.columns(2)
+
 with c1:
-    equipe_dom = st.selectbox("Équipe à domicile", equipes, index=0)
+    equipe_dom = st.selectbox(
+        "Équipe à domicile", equipes, index=0
+    )
+
 with c2:
     equipe_ext = st.selectbox(
-        "Équipe à l'extérieur", equipes,
-        index=1 if len(equipes) > 1 else 0
+        "Équipe à l'extérieur",
+        equipes,
+        index=1,
     )
 
 if equipe_dom == equipe_ext:
     st.warning("Choisis deux équipes différentes.")
 
-elif st.button("📊 Calculer les probabilités", type="primary"):
+if st.button("📊 Calculer les probabilités", type="primary"):
+    if equipe_dom == equipe_ext:
+        st.error("Les deux équipes doivent être différentes.")
+        st.stop()
+
     resultat, erreur = analyser(
         equipe_dom, equipe_ext, historique, matchs_saison
     )
@@ -367,6 +439,7 @@ elif st.button("📊 Calculer les probabilités", type="primary"):
         st.warning(erreur)
     else:
         st.subheader("3. Probabilités estimées")
+
         c1, c2, c3 = st.columns(3)
         c1.metric("1 - Victoire domicile", f'{resultat["1"]:.1%}')
         c2.metric("N - Match nul", f'{resultat["N"]:.1%}')
@@ -375,23 +448,34 @@ elif st.button("📊 Calculer les probabilités", type="primary"):
         c1, c2, c3 = st.columns(3)
         c1.metric("Plus de 2,5 buts", f'{resultat["over25"]:.1%}')
         c2.metric("Moins de 2,5 buts", f'{resultat["under25"]:.1%}')
-        c3.metric("Les deux équipes marquent", f'{resultat["btts"]:.1%}')
+        c3.metric(
+            "Les deux équipes marquent",
+            f'{resultat["btts"]:.1%}'
+        )
+
+        st.write(
+            f"Buts attendus par le modèle : "
+            f"{equipe_dom} {resultat['lambda_dom']:.2f} — "
+            f"{resultat['lambda_ext']:.2f} {equipe_ext}"
+        )
 
         st.subheader("4. Scores les plus probables")
         for a, b, p in resultat["scores"]:
-            st.write(f"**{equipe_dom} {a} - {b} {equipe_ext}** — {p:.1%}")
+            st.write(
+                f"**{equipe_dom} {a} - {b} {equipe_ext}** — {p:.1%}"
+            )
 
-        st.subheader("5. Forme récente de la saison sélectionnée")
+        st.subheader("5. Forme récente")
 
         if resultat["forme_utilisee"]:
             st.success(
-                "Forme récente intégrée à 30 % ; "
-                "référence historique pondérée à 70 %."
+                "La forme récente a été intégrée à 35 % "
+                "et la référence historique à 65 %."
             )
         else:
             st.warning(
-                "Moins de 3 matchs disponibles pour au moins une équipe. "
-                "La forme récente n'a pas été intégrée au calcul."
+                "Pas assez de matchs récents pour intégrer la forme "
+                "des deux équipes."
             )
 
         for equipe, cle_forme, cle_recents in [
@@ -425,10 +509,7 @@ elif st.button("📊 Calculer les probabilités", type="primary"):
                 + " - "
                 + tableau["FTAG"].astype(str)
             )
-            tableau["Date"] = tableau["Date"].apply(
-                lambda d: d.strftime("%d/%m/%Y")
-                if pd.notna(d) else "Date inconnue"
-            )
+            tableau["Date"] = tableau["Date"].dt.strftime("%d/%m/%Y")
 
             st.dataframe(
                 tableau[["Date", "Match", "Score", "Lieu"]],
@@ -436,40 +517,37 @@ elif st.button("📊 Calculer les probabilités", type="primary"):
                 use_container_width=True,
             )
 
-        st.subheader("6. Moyennes de référence")
+        st.subheader("6. Quantité de données historiques")
 
         c1, c2 = st.columns(2)
-        c1.markdown(f"**{equipe_dom} à domicile**")
-        c1.write(f"Matchs dans l'historique : {resultat['stats_dom']['dom']}")
-        c1.write(
-            f"Buts marqués : {resultat['stats_dom']['buts_dom']:.2f} "
-            "par match"
+        c1.metric(
+            f"{equipe_dom} à domicile",
+            resultat["stats_dom"]["dom"]
         )
-        c1.write(
-            f"Buts encaissés : {resultat['stats_dom']['encaisses_dom']:.2f} "
-            "par match"
+        c2.metric(
+            f"{equipe_ext} à l'extérieur",
+            resultat["stats_ext"]["ext"]
         )
 
-        c2.markdown(f"**{equipe_ext} à l'extérieur**")
-        c2.write(f"Matchs dans l'historique : {resultat['stats_ext']['ext']}")
-        c2.write(
-            f"Buts marqués : {resultat['stats_ext']['buts_ext']:.2f} "
-            "par match"
+        st.write(
+            "Indicateur de données : " + resultat["fiabilite"]
         )
-        c2.write(
-            f"Buts encaissés : {resultat['stats_ext']['encaisses_ext']:.2f} "
-            "par match"
+        st.caption(
+            "Cet indicateur mesure seulement la quantité de rencontres "
+            "disponibles. Il ne mesure pas la précision réelle du modèle."
         )
 
-        st.subheader("7. Limites du modèle")
-        st.info(
-            "Les probabilités sont des estimations statistiques. "
-            "Le modèle ne connaît pas automatiquement les blessures, "
-            "les compositions, les suspensions ou les cotes. "
-            "Une grande probabilité ne garantit pas un résultat."
+        st.subheader("7. Limites")
+        st.warning(
+            "Le modèle n'intègre pas automatiquement les blessures, "
+            "les suspensions, les compositions officielles, les cotes "
+            "ou les changements tactiques. Il n'a pas encore été validé "
+            "sur un ensemble de prédictions historiques. Les probabilités "
+            "ne garantissent aucun résultat et ne suffisent pas, seules, "
+            "à justifier un pari."
         )
 
 st.divider()
 st.caption(
-    "Football Analytics AI V2.2 | Données historiques Football-Data.co.uk"
+    "Football Analytics AI V2.3 | Données historiques Football-Data.co.uk"
 )
