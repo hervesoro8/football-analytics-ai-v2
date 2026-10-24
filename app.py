@@ -25,7 +25,19 @@ except Exception:
 
 BASE_URL = "https://api.football-data.org/v4"
 HEADERS = {"X-Auth-Token": TOKEN}
+try:
+    test = requests.get(
+        f"{BASE_URL}/competitions",
+        headers=HEADERS,
+        timeout=15
+    )
+    st.write("TEST API :", test.status_code)
 
+    if test.status_code != 200:
+        st.write("Réponse :", test.text[:300])
+
+except Exception as e:
+    st.write("Erreur de connexion :", str(e))
 
 def api_get(path, params=None):
     """Récupère les données et affiche les erreurs de l'API."""
