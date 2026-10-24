@@ -70,7 +70,139 @@ def api_get(endpoint, params=None):
     return None
 
 
+# 
 # -----------------------------
+# MOTEUR D'ANALYSE STATISTIQUE
+# -----------------------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def charger_historique(code_competition, debut, fin):
+    """Charge les matchs terminés d'une compétition."""
+    endpoint = "/competitions/" + code_competition + "/matches"
+
+    try:
+        response = requests.get(
+            BASE_URL + endpoint,
+            headers=HEADERS,
+            params={
+                "dateFrom": debut,
+                "dateTo": fin,
+                "status": "FINISHED",
+                "limit": 500
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            return []
+
+        return response.json().get("matches", [])
+
+    except requests.exceptions.RequestException:
+        return []
+
+
+def calculer_moyennes(equipe, historique):
+    """Calcule les buts marqués et encaissés."""
+    stats = {
+        "domicile": {"marques": 0, "encaisses": 0, "matchs": 0},
+        "exterieur": {"marques": 0, "encaisses": 0, "matchs": 0}
+    }
+
+    for match in historique:
+        if match.get("status") != "FINISHED":
+            continue
+
+        domicile = (match.get("homeTeam") or {}).get("name")
+        exterieur = (match.get("awayTeam") or {}).get("name")
+        score = match.get("score", {}).get("fullTime", {})
+
+        buts_dom = score.get("home")
+        buts_ext = score.get("away")
+
+        if buts_dom is None or buts_ext is None:
+            continue
+
+        if domicile == equipe:
+            bloc = stats["domicile"]
+            bloc["marques"] += buts_dom
+            bloc["encaisses"] += buts_ext
+            bloc["matchs"] += 1
+
+        if exterieur == equipe:
+            bloc = stats["exterieur"]
+            bloc["marques"] += buts_ext
+            bloc["encaisses"] += buts_dom
+            bloc["matchs"] += 1
+
+    return stats
+
+
+def probabilite_poisson(k, lam):
+    """Estime la probabilité de k buts."""
+    return math.exp(-lam) * (lam ** k) / math.factorial(k)
+
+
+def analyser_match(equipe_dom, equipe_ext, historique):
+    """Calcule les probabilités principales."""
+    stats_dom = calculer_moyennes(equipe_dom, historique)
+    stats_ext = calculer_moyennes(equipe_ext, historique)
+
+    dom = stats_dom["domicile"]
+    ext = stats_ext["exterieur"]
+
+    if dom["matchs"] < 3 or ext["matchs"] < 3:
+        return {
+            "erreur": (
+                "Historique insuffisant : au moins 3 matchs "
+                "à domicile et 3 à l'extérieur sont nécessaires."
+            )
+        }
+
+    moyenne_dom = dom["marques"] / dom["matchs"]
+    defense_dom = dom["encaisses"] / dom["matchs"]
+    moyenne_ext = ext["marques"] / ext["matchs"]
+    defense_ext = ext["encaisses"] / ext["matchs"]
+
+    lambda_dom = (moyenne_dom + defense_ext) / 2
+    lambda_ext = (moyenne_ext + defense_dom) / 2
+
+    scores = []
+
+    for b1 in range(11):
+        for b2 in range(11):
+            p1 = probabilite_poisson(b1, lambda_dom)
+            p2 = probabilite_poisson(b2, lambda_ext)
+            scores.append((b1, b2, p1 * p2))
+
+    total = sum(p for _, _, p in scores)
+
+    scores = [
+        (b1, b2, p / total)
+        for b1, b2, p in scores
+    ]
+
+    victoire_dom = sum(p for b1, b2, p in scores if b1 > b2)
+    nul = sum(p for b1, b2, p in scores if b1 == b2)
+    victoire_ext = sum(p for b1, b2, p in scores if b1 < b2)
+    over25 = sum(p for b1, b2, p in scores if b1 + b2 >= 3)
+    btts = sum(p for b1, b2, p in scores if b1 >= 1 and b2 >= 1)
+
+    return {
+        "erreur": None,
+        "1": victoire_dom,
+        "N": nul,
+        "2": victoire_ext,
+        "over25": over25,
+        "under25": 1 - over25,
+        "btts": btts,
+        "lambda_dom": lambda_dom,
+        "lambda_ext": lambda_ext,
+        "scores": sorted(
+            scores, key=lambda x: x[2], reverse=True
+        )[:5]
+    }
+-----------------------------
 # 3. CHOIX DES DATES
 # -----------------------------
 aujourd_hui = date.today()
