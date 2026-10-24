@@ -202,7 +202,7 @@ def analyser_match(equipe_dom, equipe_ext, historique):
             scores, key=lambda x: x[2], reverse=True
         )[:5]
     }
------------------------------
+# -----------------------------
 # 3. CHOIX DES DATES
 # -----------------------------
 aujourd_hui = date.today()
