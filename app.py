@@ -34,11 +34,14 @@ if not token:
 HEADERS = {"X-Auth-Token": token}
 
 
+
 def api_get(endpoint, params=None):
-    """Interroge l'API et retourne les données reçues."""
+    """Interroge l'API et affiche les erreurs detaillees."""
     try:
+        url = BASE_URL.rstrip("/") + "/" + endpoint.lstrip("/")
+
         response = requests.get(
-            BASE_URL + endpoint,
+            url,
             headers=HEADERS,
             params=params,
             timeout=TIMEOUT
@@ -47,23 +50,21 @@ def api_get(endpoint, params=None):
         if response.status_code == 200:
             return response.json()
 
-        if response.status_code == 400:
-            st.error("Requête incorrecte envoyée à l'API.")
-        elif response.status_code == 401:
-            st.error("Token refusé. Vérifie le secret dans Streamlit.")
-        elif response.status_code == 403:
-            st.error("Accès refusé pour cette donnée ou compétition.")
-        elif response.status_code == 429:
-            st.warning("Limite de requêtes atteinte. Réessaie plus tard.")
-        else:
-            st.error("Erreur de l'API : HTTP " + str(response.status_code))
+        st.error("Erreur API : HTTP " + str(response.status_code))
+
+        # Afficher le detail de l'erreur renvoyee par l'API
+        detail = response.text[:500]
+        if detail:
+            st.code(detail)
 
         return None
 
     except requests.exceptions.Timeout:
-        st.error("Le serveur met trop de temps à répondre.")
-    except requests.exceptions.RequestException:
-        st.error("Connexion impossible. Vérifie Internet.")
+        st.error("Le serveur met trop de temps a repondre.")
+    except requests.exceptions.RequestException as erreur:
+        st.error("Erreur de connexion : " + str(erreur))
+    except ValueError:
+        st.error("La reponse de l'API n'est pas un JSON valide.")
 
     return None
 
