@@ -1,8 +1,12 @@
 
 import streamlit as st
 import requests
-import math
-from datetime import date
+import pandas as pd
+from datetime import date, timedelta
+
+# ----------------------------------
+# CONFIGURATION DE L'APPLICATION
+# ----------------------------------
 
 st.set_page_config(
     page_title="Football Analytics AI V2",
@@ -10,342 +14,225 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⚽ Football Analytics AI V2")
-st.caption("Matchs, résultats et probabilités statistiques")
+BASE_URL = "https://api.football-data.org/v4"
+TIMEOUT = 20
 
-# Connexion sécurisée à football-data.org
+st.title("⚽ Football Analytics AI V2")
+st.caption("Matchs, résultats et statistiques du football")
+
+# ----------------------------------
+# RECUPERATION DU TOKEN SECRET
+# ----------------------------------
+
 try:
     TOKEN = st.secrets["FOOTBALL_DATA_TOKEN"]
-    import re
-st.write("Longueur du token :", len(TOKEN))
-st.write("Format correct :", bool(re.fullmatch(r"[a-z1-9]+", TOKEN)))
 except Exception:
     st.error(
-        "Clé absente. Ajoute FOOTBALL_DATA_TOKEN "
-        "dans les Secrets de Streamlit."
+        "Le token API est introuvable. "
+        "Vérifie FOOTBALL_DATA_TOKEN dans les Secrets de Streamlit."
     )
     st.stop()
 
-BASE_URL = "https://api.football-data.org/v4"
-HEADERS = {"X-Auth-Token": TOKEN}
-try:
-    test = requests.get(
-        f"{BASE_URL}/competitions",
-        headers=HEADERS,
-        timeout=15
-    )
-    st.write("TEST API :", test.status_code)
+if not TOKEN or not TOKEN.strip():
+    st.error("Le token API est vide. Vérifie les Secrets de Streamlit.")
+    st.stop()
 
-    if test.status_code != 200:
-        st.write("Réponse :", test.text[:300])
+HEADERS = {"X-Auth-Token": TOKEN.strip()}
 
-except Exception as e:
-    st.write("Erreur de connexion :", str(e))
 
-def api_get(path, params=None):
-    """Récupère les données et affiche les erreurs de l'API."""
+# ----------------------------------
+# FONCTION POUR CONTACTER L'API
+# ----------------------------------
+
+def appeler_api(endpoint, params=None):
+    url = f"{BASE_URL}/{endpoint.lstrip('/')}"
+
     try:
         response = requests.get(
-            BASE_URL + path,
+            url,
             headers=HEADERS,
             params=params,
-            timeout=20
+            timeout=TIMEOUT
         )
 
-        if response.status_code != 200:
+        if response.status_code == 200:
+            return response.json()
+
+        if response.status_code == 400:
             st.error(
-                f"Erreur API {response.status_code} : "
-                f"{response.text[:1000]}"
+                "Erreur 400 : la demande a été refusée. "
+                "Vérifie le token et les paramètres."
             )
-            return None
+        elif response.status_code == 401:
+            st.error(
+                "Erreur 401 : le token API n'est pas accepté. "
+                "Vérifie FOOTBALL_DATA_TOKEN dans Streamlit Secrets."
+            )
+        elif response.status_code == 403:
+            st.error(
+                "Erreur 403 : ton compte n'a peut-être pas accès "
+                "à cette compétition ou à cette fonctionnalité."
+            )
+        elif response.status_code == 429:
+            st.warning(
+                "Limite de requêtes atteinte. "
+                "Attends un peu avant de réessayer."
+            )
+        else:
+            st.error(f"Erreur API : code {response.status_code}.")
 
-        return response.json()
-
-    except requests.exceptions.RequestException as error:
-        st.error(f"Erreur de connexion : {error}")
         return None
 
+    except requests.exceptions.Timeout:
+        st.error("La connexion a pris trop de temps. Réessaie.")
+    except requests.exceptions.RequestException:
+        st.error("Impossible de contacter le service de football.")
     except ValueError:
-        st.error("Le serveur a renvoyé une réponse illisible.")
-        return None
+        st.error("La réponse du service est illisible.")
 
+    return None
+
+
+# ----------------------------------
+# CHARGEMENT DES COMPETITIONS
+# ----------------------------------
 
 @st.cache_data(ttl=1800)
-def get_competitions():
-    result = api_get("/competitions")
+def charger_competitions():
+    data = appeler_api("competitions")
 
-    if result is None:
+    if not data:
         return []
 
-    return result.get("competitions", [])
+    return data.get("competitions", [])
 
 
-def get_recent(team_id):
-    result = api_get(
-        f"/teams/{team_id}/matches",
-        {"status": "FINISHED", "limit": 5}
-    )
-
-    if result is None:
-        return []
-
-    return result.get("matches", [])
-
-
-def goals_summary(matches, team_id):
-    scored = []
-    conceded = []
-
-    for match in matches:
-        home_id = match.get("homeTeam", {}).get("id")
-        away_id = match.get("awayTeam", {}).get("id")
-        score = match.get("score", {}).get("fullTime", {})
-
-        home_goals = score.get("home")
-        away_goals = score.get("away")
-
-        if home_goals is None or away_goals is None:
-            continue
-
-        if home_id == team_id:
-            scored.append(home_goals)
-            conceded.append(away_goals)
-
-        elif away_id == team_id:
-            scored.append(away_goals)
-            conceded.append(home_goals)
-
-    if not scored:
-        return None
-
-    return (
-        sum(scored) / len(scored),
-        sum(conceded) / len(conceded)
-    )
-
-
-def poisson(lam, goals):
-    return math.exp(-lam) * (lam ** goals) / math.factorial(goals)
-
-
-def calculate_probabilities(home_lambda, away_lambda):
-    # Calcul sur les scores possibles de 0 à 10 buts
-    home_win = 0.0
-    draw = 0.0
-    away_win = 0.0
-    over_25 = 0.0
-    total = 0.0
-
-    for home_goals in range(11):
-        p_home_goals = poisson(home_lambda, home_goals)
-
-        for away_goals in range(11):
-            p_away_goals = poisson(away_lambda, away_goals)
-            probability = p_home_goals * p_away_goals
-
-            total += probability
-
-            if home_goals > away_goals:
-                home_win += probability
-            elif home_goals == away_goals:
-                draw += probability
-            else:
-                away_win += probability
-
-            if home_goals + away_goals > 2:
-                over_25 += probability
-
-    if total > 0:
-        home_win /= total
-        draw /= total
-        away_win /= total
-        over_25 /= total
-
-    return home_win, draw, away_win, over_25
-
-
-# Affichage des compétitions accessibles
-st.subheader("1. Choisir une compétition")
-
-competitions = get_competitions()
+competitions = charger_competitions()
 
 if not competitions:
     st.warning(
-        "Aucune compétition reçue. Vérifie le message d'erreur "
-        "ci-dessus, ta clé et les accès de ton offre."
+        "Aucune compétition reçue. Vérifie le token, "
+        "les accès de ton compte et réessaie."
     )
     st.stop()
 
-available = {
-    f"{item['name']} ({item['code']})": item
-    for item in competitions
-    if item.get("code")
+# ----------------------------------
+# CHOIX DE LA COMPETITION
+# ----------------------------------
+
+competitions_valides = [
+    c for c in competitions if c.get("code")
+]
+
+if not competitions_valides:
+    st.warning("Aucune compétition avec un code disponible.")
+    st.stop()
+
+noms_competitions = {
+    f"{c['name']} ({c.get('area', {}).get('name', 'Pays inconnu')})":
+        c["code"]
+    for c in competitions_valides
 }
 
-if not available:
-    st.warning("Aucune compétition utilisable n'a été reçue.")
-    st.stop()
-
-competition_name = st.selectbox(
-    "Compétition",
-    list(available.keys())
+nom_choisi = st.selectbox(
+    "1. Choisis une compétition",
+    options=list(noms_competitions.keys())
 )
 
-competition = available[competition_name]
+code_competition = noms_competitions[nom_choisi]
 
-match_date = st.date_input(
-    "Date des matchs",
-    value=date.today()
-)
+# ----------------------------------
+# CHOIX DES DATES
+# ----------------------------------
 
-if st.button("Rechercher les matchs", type="primary"):
-    st.session_state["selected_competition"] = competition["code"]
-    st.session_state["selected_date"] = match_date
+col1, col2 = st.columns(2)
 
-# Recherche et analyse
-if "selected_competition" in st.session_state:
-    code = st.session_state["selected_competition"]
-    selected_date = st.session_state["selected_date"]
-
-    result = api_get(
-        f"/competitions/{code}/matches",
-        {
-            "dateFrom": selected_date.isoformat(),
-            "dateTo": selected_date.isoformat()
-        }
+with col1:
+    date_debut = st.date_input(
+        "Date de début",
+        value=date.today()
     )
 
-    if result is not None:
-        matches = result.get("matches", [])
+with col2:
+    date_fin = st.date_input(
+        "Date de fin",
+        value=date.today() + timedelta(days=7)
+    )
 
-        if not matches:
-            st.info(
-                "Aucun match trouvé à cette date. "
-                "Essaie une autre date ou compétition."
-            )
+# ----------------------------------
+# RECHERCHE DES MATCHS
+# ----------------------------------
+
+if st.button("🔎 Rechercher les matchs", type="primary"):
+    if date_debut > date_fin:
+        st.error("La date de début doit précéder la date de fin.")
+        st.stop()
+
+    with st.spinner("Recherche des matchs en cours..."):
+        donnees = appeler_api(
+            f"competitions/{code_competition}/matches",
+            params={
+                "dateFrom": date_debut.isoformat(),
+                "dateTo": date_fin.isoformat()
+            }
+        )
+
+    if donnees is None:
+        st.stop()
+
+    matchs = donnees.get("matches", [])
+
+    if not matchs:
+        st.info(
+            "Aucun match trouvé pour cette période. "
+            "Essaie d'autres dates ou une autre compétition."
+        )
+        st.stop()
+
+    lignes = []
+
+    for match in matchs:
+        equipe_domicile = match.get("homeTeam") or {}
+        equipe_exterieure = match.get("awayTeam") or {}
+        score = match.get("score") or {}
+        resultat = score.get("fullTime") or {}
+
+        buts_domicile = resultat.get("home")
+        buts_exterieur = resultat.get("away")
+
+        if buts_domicile is None or buts_exterieur is None:
+            score_affiche = "À jouer"
         else:
-            match_options = {}
-
-            for item in matches:
-                home_name = item.get("homeTeam", {}).get(
-                    "name", "Équipe domicile"
-                )
-                away_name = item.get("awayTeam", {}).get(
-                    "name", "Équipe extérieure"
-                )
-
-                label = f"{home_name} - {away_name}"
-                match_options[label] = item
-
-            st.subheader("2. Choisir un match")
-
-            match_label = st.selectbox(
-                "Match",
-                list(match_options.keys())
+            score_affiche = (
+                f"{buts_domicile} - {buts_exterieur}"
             )
 
-            match = match_options[match_label]
+        lignes.append({
+            "Date": match.get("utcDate", "")[:10],
+            "Domicile": equipe_domicile.get("name", "Inconnu"),
+            "Score": score_affiche,
+            "Extérieur": equipe_exterieure.get("name", "Inconnu"),
+            "Statut": match.get("status", "Inconnu"),
+            "Journée": match.get("matchday") or "-"
+        })
 
-            st.write("**Statut :**", match.get("status", "Inconnu"))
+    tableau = pd.DataFrame(lignes)
 
-            score = match.get("score", {}).get("fullTime", {})
-            home_score = score.get("home")
-            away_score = score.get("away")
+    st.subheader(f"📋 Matchs : {nom_choisi}")
+    st.write(f"Nombre de matchs trouvés : {len(tableau)}")
+    st.dataframe(tableau, use_container_width=True, hide_index=True)
 
-            if home_score is not None and away_score is not None:
-                st.metric(
-                    "Score final",
-                    f"{home_score} - {away_score}"
-                )
-            else:
-                st.info("Le score final n'est pas encore disponible.")
+    fichier_csv = tableau.to_csv(index=False).encode("utf-8-sig")
 
-            home_team = match.get("homeTeam", {})
-            away_team = match.get("awayTeam", {})
+    st.download_button(
+        label="📥 Télécharger les matchs (CSV)",
+        data=fichier_csv,
+        file_name="matchs_football.csv",
+        mime="text/csv"
+    )
 
-            home_id = home_team.get("id")
-            away_id = away_team.get("id")
-
-            st.subheader("3. Forme récente des équipes")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown(
-                    f"**{home_team.get('name', 'Domicile')}**"
-                )
-
-                home_matches = get_recent(home_id) if home_id else []
-                home_stats = (
-                    goals_summary(home_matches, home_id)
-                    if home_id else None
-                )
-
-                if home_stats:
-                    st.write(
-                        f"Buts marqués en moyenne : {home_stats[0]:.2f}"
-                    )
-                    st.write(
-                        f"Buts encaissés en moyenne : {home_stats[1]:.2f}"
-                    )
-                else:
-                    st.write("Statistiques récentes indisponibles.")
-
-            with col2:
-                st.markdown(
-                    f"**{away_team.get('name', 'Extérieur')}**"
-                )
-
-                away_matches = get_recent(away_id) if away_id else []
-                away_stats = (
-                    goals_summary(away_matches, away_id)
-                    if away_id else None
-                )
-
-                if away_stats:
-                    st.write(
-                        f"Buts marqués en moyenne : {away_stats[0]:.2f}"
-                    )
-                    st.write(
-                        f"Buts encaissés en moyenne : {away_stats[1]:.2f}"
-                    )
-                else:
-                    st.write("Statistiques récentes indisponibles.")
-
-            # Estimation des probabilités
-            if home_stats and away_stats:
-                home_lambda = (
-                    home_stats[0] + away_stats[1]
-                ) / 2
-
-                away_lambda = (
-                    away_stats[0] + home_stats[1]
-                ) / 2
-
-                probabilities = calculate_probabilities(
-                    home_lambda,
-                    away_lambda
-                )
-
-                st.subheader("4. Probabilités indicatives")
-
-                p_home, p_draw, p_away, p_over = probabilities
-
-                c1, c2, c3 = st.columns(3)
-
-                c1.metric("Victoire domicile", f"{p_home:.1%}")
-                c2.metric("Match nul", f"{p_draw:.1%}")
-                c3.metric("Victoire extérieur", f"{p_away:.1%}")
-
-                st.metric("Plus de 2,5 buts", f"{p_over:.1%}")
-
-                st.caption(
-                    "Estimations mathématiques simplifiées à partir "
-                    "des buts récents. Les résultats ne sont pas garantis. "
-                    "Les données disponibles dépendent de l'offre API."
-                )
-            else:
-                st.info(
-                    "Les probabilités ne peuvent pas être calculées "
-                    "sans les statistiques récentes des deux équipes."
-                )
+st.divider()
+st.caption(
+    "Les données dépendent des compétitions accessibles avec ton compte "
+    "football-data.org. Les scores et résultats ne sont pas des prédictions."
+)
