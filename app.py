@@ -16,6 +16,9 @@ st.caption("Matchs, résultats et probabilités statistiques")
 # Connexion sécurisée à football-data.org
 try:
     TOKEN = st.secrets["FOOTBALL_DATA_TOKEN"]
+    import re
+st.write("Longueur du token :", len(TOKEN))
+st.write("Format correct :", bool(re.fullmatch(r"[a-z1-9]+", TOKEN)))
 except Exception:
     st.error(
         "Clé absente. Ajoute FOOTBALL_DATA_TOKEN "
