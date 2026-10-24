@@ -245,11 +245,11 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
     forme_ext, recents_ext = calculer_forme(
         equipe_ext, saison_courante 
     )
-st.subheader("Vérification des 5 derniers matchs")
-st.write("Matchs de l'équipe à domicile")
-st.dataframe(recents_dom)
-st.write("Matchs de l'équipe à l'extérieur")
-st.dataframe(recents_ext)
+    st.subheader("Vérification des 5 derniers matchs")
+    st.write("Matchs de l'équipe à domicile")
+    st.dataframe(recents_dom)
+    st.write("Matchs de l'équipe à l'extérieur")
+    st.dataframe(recents_ext)
     
 
     lambda_dom = lambda_dom_hist
