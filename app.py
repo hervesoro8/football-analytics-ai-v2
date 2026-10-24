@@ -1,6 +1,7 @@
 
 import streamlit as st
-import math
+import requests
+from datetime import date, timedelta
 
 st.set_page_config(
     page_title="Football Analytics AI V2",
@@ -9,101 +10,98 @@ st.set_page_config(
 )
 
 st.title("⚽ Football Analytics AI V2")
-st.caption("Analyse statistique de football — version de démarrage")
+st.write("Calendrier et résultats du football en direct depuis API-Football.")
 
-st.info(
-    "Cette première version permet d'explorer un modèle "
-    "statistique simple. Elle ne garantit aucun résultat de pari."
-)
+try:
+    api_key = st.secrets["API_FOOTBALL_KEY"]
+except Exception:
+    api_key = ""
 
-st.header("1. Informations du match")
+if not api_key:
+    st.error("Clé API absente. Vérifie les Secrets de Streamlit.")
+    st.stop()
 
-home_team = st.text_input("Équipe à domicile", "Côte d'Ivoire")
-away_team = st.text_input("Équipe à l'extérieur", "Ghana")
+BASE_URL = "https://v3.football.api-sports.io"
 
-st.header("2. Statistiques à saisir")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    home_goals = st.number_input(
-        "Buts moyens à domicile",
-        min_value=0.0,
-        max_value=10.0,
-        value=1.5,
-        step=0.1
+def api_get(endpoint, params=None):
+    headers = {"x-apisports-key": api_key}
+    response = requests.get(
+        f"{BASE_URL}/{endpoint}",
+        headers=headers,
+        params=params or {},
+        timeout=25
     )
+    response.raise_for_status()
+    data = response.json()
 
-with col2:
-    away_goals = st.number_input(
-        "Buts moyens à l'extérieur",
-        min_value=0.0,
-        max_value=10.0,
-        value=1.0,
-        step=0.1
-    )
+    if data.get("errors"):
+        raise ValueError(str(data["errors"]))
 
-max_goals = st.slider(
-    "Nombre maximal de buts calculés par équipe",
-    min_value=5,
-    max_value=10,
-    value=7
-)
+    return data.get("response", [])
 
-def poisson_probability(goals, average):
-    if average == 0:
-        return 1.0 if goals == 0 else 0.0
-    return (math.exp(-average) * average**goals) / math.factorial(goals)
+st.header("Rechercher les matchs")
 
-if st.button("Analyser le match", type="primary"):
-    if not home_team.strip() or not away_team.strip():
-        st.error("Entre le nom des deux équipes.")
-    else:
-        home_win = 0.0
-        draw = 0.0
-        away_win = 0.0
-        over_25 = 0.0
-        total_probability = 0.0
+match_date = st.date_input("Date des matchs", value=date.today())
 
-        for h in range(max_goals + 1):
-            for a in range(max_goals + 1):
-                probability = (
-                    poisson_probability(h, home_goals)
-                    * poisson_probability(a, away_goals)
+if st.button("Charger les matchs", type="primary"):
+    with st.spinner("Recherche des matchs en cours..."):
+        try:
+            matches = api_get(
+                "fixtures",
+                {"date": match_date.isoformat()}
+            )
+
+            if not matches:
+                st.warning(
+                    "Aucun match trouvé pour cette date "
+                    "avec les données disponibles."
                 )
+            else:
+                st.success(f"{len(matches)} match(s) trouvé(s).")
 
-                total_probability += probability
+                for match in matches:
+                    fixture = match.get("fixture", {})
+                    teams = match.get("teams", {})
+                    league = match.get("league", {})
+                    goals = match.get("goals", {})
 
-                if h > a:
-                    home_win += probability
-                elif h == a:
-                    draw += probability
-                else:
-                    away_win += probability
+                    home = teams.get("home", {}).get("name", "?")
+                    away = teams.get("away", {}).get("name", "?")
+                    league_name = league.get("name", "Compétition")
+                    country = league.get("country", "")
+                    status = fixture.get("status", {}).get("long", "")
+                    home_goals = goals.get("home")
+                    away_goals = goals.get("away")
 
-                if h + a >= 3:
-                    over_25 += probability
+                    with st.container(border=True):
+                        st.subheader(f"{home} - {away}")
+                        st.caption(f"{league_name} · {country}")
+                        if home_goals is not None and away_goals is not None:
+                            st.write(
+                                f"**Score : {home_goals} - {away_goals}**"
+                            )
+                        else:
+                            st.write("Score : pas encore disponible")
+                        st.caption(f"État du match : {status}")
 
-        if total_probability > 0:
-            home_win /= total_probability
-            draw /= total_probability
-            away_win /= total_probability
-            over_25 /= total_probability
+            st.caption(
+                "La couverture et les statistiques disponibles "
+                "dépendent de la compétition et du forfait API."
+            )
 
-        st.header("3. Résultats du modèle")
+        except requests.exceptions.HTTPError as exc:
+            st.error(f"Erreur HTTP de l'API : {exc}")
+        except requests.exceptions.RequestException:
+            st.error(
+                "Impossible de contacter l'API. Vérifie ta connexion "
+                "Internet et réessaie."
+            )
+        except Exception as exc:
+            st.error(f"Erreur : {exc}")
 
-        results = {
-            f"Victoire {home_team} (1)": home_win,
-            "Match nul (N)": draw,
-            f"Victoire {away_team} (2)": away_win,
-            "Plus de 2,5 buts": over_25,
-        }
-
-        for label, probability in results.items():
-            st.metric(label, f"{probability:.1%}")
-
-        st.caption(
-            "Estimations théoriques basées uniquement sur les moyennes "
-            "de buts saisies. Ce ne sont pas des prédictions vérifiées "
-            "à partir de données réelles."
-        )
+st.divider()
+st.caption(
+    "Version initiale connectée aux données de calendrier. "
+    "Les probabilités avancées seront ajoutées après vérification "
+    "du bon fonctionnement de la connexion."
+)
