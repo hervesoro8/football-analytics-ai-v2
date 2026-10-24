@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import date, timedelta
 
 # ----------------------------------
-# CONFIGURATION DE L'APPLICATION
+# CONFIGURATION
 # ----------------------------------
 
 st.set_page_config(
@@ -20,28 +20,29 @@ TIMEOUT = 20
 st.title("⚽ Football Analytics AI V2")
 st.caption("Matchs, résultats et statistiques du football")
 
+
 # ----------------------------------
-# RECUPERATION DU TOKEN SECRET
+# TOKEN SECRET
 # ----------------------------------
 
 try:
     TOKEN = st.secrets["FOOTBALL_DATA_TOKEN"]
 except Exception:
     st.error(
-        "Le token API est introuvable. "
-        "Vérifie FOOTBALL_DATA_TOKEN dans les Secrets de Streamlit."
+        "Token introuvable. Vérifie FOOTBALL_DATA_TOKEN "
+        "dans les Secrets de Streamlit."
     )
     st.stop()
 
 if not TOKEN or not TOKEN.strip():
-    st.error("Le token API est vide. Vérifie les Secrets de Streamlit.")
+    st.error("Le token API est vide. Vérifie les Secrets.")
     st.stop()
 
 HEADERS = {"X-Auth-Token": TOKEN.strip()}
 
 
 # ----------------------------------
-# FONCTION POUR CONTACTER L'API
+# FONCTION API
 # ----------------------------------
 
 def appeler_api(endpoint, params=None):
@@ -58,37 +59,35 @@ def appeler_api(endpoint, params=None):
         if response.status_code == 200:
             return response.json()
 
-        if response.status_code == 400:
-            st.error(
-                "Erreur 400 : la demande a été refusée. "
-                "Vérifie le token et les paramètres."
-            )
+        elif response.status_code == 400:
+            st.error("Erreur 400 : réponse exacte du serveur :")
+            st.code(response.text[:500])
+
         elif response.status_code == 401:
-            st.error(
-                "Erreur 401 : le token API n'est pas accepté. "
-                "Vérifie FOOTBALL_DATA_TOKEN dans Streamlit Secrets."
-            )
+            st.error("Erreur 401 : token non accepté.")
+            st.code(response.text[:500])
+
         elif response.status_code == 403:
-            st.error(
-                "Erreur 403 : ton compte n'a peut-être pas accès "
-                "à cette compétition ou à cette fonctionnalité."
-            )
+            st.error("Erreur 403 : accès refusé pour cette demande.")
+            st.code(response.text[:500])
+
         elif response.status_code == 429:
-            st.warning(
-                "Limite de requêtes atteinte. "
-                "Attends un peu avant de réessayer."
-            )
+            st.warning("Trop de requêtes. Attends un peu.")
+            st.code(response.text[:500])
+
         else:
             st.error(f"Erreur API : code {response.status_code}.")
+            st.code(response.text[:500])
 
         return None
 
     except requests.exceptions.Timeout:
         st.error("La connexion a pris trop de temps. Réessaie.")
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as erreur:
         st.error("Impossible de contacter le service de football.")
+        st.code(str(erreur))
     except ValueError:
-        st.error("La réponse du service est illisible.")
+        st.error("La réponse du serveur est illisible.")
 
     return None
 
@@ -101,27 +100,37 @@ def appeler_api(endpoint, params=None):
 def charger_competitions():
     data = appeler_api("competitions")
 
-    if not data:
-        return []
+    if data is None:
+        return None
 
     return data.get("competitions", [])
 
 
 competitions = charger_competitions()
 
-if not competitions:
+if competitions is None:
     st.warning(
-        "Aucune compétition reçue. Vérifie le token, "
-        "les accès de ton compte et réessaie."
+        "Impossible de charger les compétitions. "
+        "Lis le message d'erreur affiché au-dessus."
     )
     st.stop()
+
+if not competitions:
+    st.warning(
+        "Aucune compétition disponible pour ce compte. "
+        "Vérifie les accès de ton compte API."
+    )
+    st.stop()
+
 
 # ----------------------------------
 # CHOIX DE LA COMPETITION
 # ----------------------------------
 
 competitions_valides = [
-    c for c in competitions if c.get("code")
+    competition
+    for competition in competitions
+    if competition.get("code")
 ]
 
 if not competitions_valides:
@@ -129,9 +138,11 @@ if not competitions_valides:
     st.stop()
 
 noms_competitions = {
-    f"{c['name']} ({c.get('area', {}).get('name', 'Pays inconnu')})":
-        c["code"]
-    for c in competitions_valides
+    (
+        f"{competition['name']} "
+        f"({competition.get('area', {}).get('name', 'Pays inconnu')})"
+    ): competition["code"]
+    for competition in competitions_valides
 }
 
 nom_choisi = st.selectbox(
@@ -141,8 +152,9 @@ nom_choisi = st.selectbox(
 
 code_competition = noms_competitions[nom_choisi]
 
+
 # ----------------------------------
-# CHOIX DES DATES
+# DATES DES MATCHS
 # ----------------------------------
 
 col1, col2 = st.columns(2)
@@ -159,16 +171,18 @@ with col2:
         value=date.today() + timedelta(days=7)
     )
 
+
 # ----------------------------------
 # RECHERCHE DES MATCHS
 # ----------------------------------
 
 if st.button("🔎 Rechercher les matchs", type="primary"):
+
     if date_debut > date_fin:
         st.error("La date de début doit précéder la date de fin.")
         st.stop()
 
-    with st.spinner("Recherche des matchs en cours..."):
+    with st.spinner("Recherche des matchs..."):
         donnees = appeler_api(
             f"competitions/{code_competition}/matches",
             params={
@@ -192,26 +206,24 @@ if st.button("🔎 Rechercher les matchs", type="primary"):
     lignes = []
 
     for match in matchs:
-        equipe_domicile = match.get("homeTeam") or {}
-        equipe_exterieure = match.get("awayTeam") or {}
+        domicile = match.get("homeTeam") or {}
+        exterieur = match.get("awayTeam") or {}
         score = match.get("score") or {}
-        resultat = score.get("fullTime") or {}
+        score_final = score.get("fullTime") or {}
 
-        buts_domicile = resultat.get("home")
-        buts_exterieur = resultat.get("away")
+        buts_dom = score_final.get("home")
+        buts_ext = score_final.get("away")
 
-        if buts_domicile is None or buts_exterieur is None:
+        if buts_dom is None or buts_ext is None:
             score_affiche = "À jouer"
         else:
-            score_affiche = (
-                f"{buts_domicile} - {buts_exterieur}"
-            )
+            score_affiche = f"{buts_dom} - {buts_ext}"
 
         lignes.append({
             "Date": match.get("utcDate", "")[:10],
-            "Domicile": equipe_domicile.get("name", "Inconnu"),
+            "Domicile": domicile.get("name", "Inconnu"),
             "Score": score_affiche,
-            "Extérieur": equipe_exterieure.get("name", "Inconnu"),
+            "Extérieur": exterieur.get("name", "Inconnu"),
             "Statut": match.get("status", "Inconnu"),
             "Journée": match.get("matchday") or "-"
         })
@@ -219,8 +231,12 @@ if st.button("🔎 Rechercher les matchs", type="primary"):
     tableau = pd.DataFrame(lignes)
 
     st.subheader(f"📋 Matchs : {nom_choisi}")
-    st.write(f"Nombre de matchs trouvés : {len(tableau)}")
-    st.dataframe(tableau, use_container_width=True, hide_index=True)
+    st.write(f"Nombre de matchs : {len(tableau)}")
+    st.dataframe(
+        tableau,
+        use_container_width=True,
+        hide_index=True
+    )
 
     fichier_csv = tableau.to_csv(index=False).encode("utf-8-sig")
 
@@ -231,8 +247,14 @@ if st.button("🔎 Rechercher les matchs", type="primary"):
         mime="text/csv"
     )
 
+
+# ----------------------------------
+# PIED DE PAGE
+# ----------------------------------
+
 st.divider()
 st.caption(
-    "Les données dépendent des compétitions accessibles avec ton compte "
-    "football-data.org. Les scores et résultats ne sont pas des prédictions."
+    "Les données dépendent des compétitions accessibles "
+    "avec ton compte football-data.org. "
+    "Les résultats affichés ne sont pas des prédictions."
 )
