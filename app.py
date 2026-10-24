@@ -307,8 +307,6 @@ colonne2.metric("Matchs à venir", len(matchs_a_venir))
 colonne3.metric("Compétitions accessibles", len(competitions))
 
 # -----------------------------
-# 
-# -----------------------------
 # 7. AFFICHAGE DES MATCHS ET ANALYSES
 # -----------------------------
 
@@ -441,6 +439,7 @@ else:
                             "Estimations statistiques fondées sur "
                             "les résultats historiques disponibles. "
                             "Elles ne garantissent aucun résultat."
+                        )
 
 # -----------------------------
 # 8. FIN DE PAGE
