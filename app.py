@@ -31,7 +31,9 @@ def api_get(path, params=None):
         if response.status_code == 429:
             st.error("Limite de requêtes atteinte. Réessaie plus tard.")
             return None
-        response.raise_for_status()
+        if response.status_code >= 400:
+    st.error(f"Erreur API {response.status_code} : {response.text}")
+    return None
         return response.json()
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur de connexion : {e}")
