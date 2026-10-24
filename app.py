@@ -170,7 +170,11 @@ def calculer_forme(equipe, matchs):
         return None, recents
 
     poids = poids_recence(recents, demi_vie_jours=60)
-
+    st.write("Diagnostic des pondérations")
+    st.dataframe(
+    recents[["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]]
+    .assign(Poids=poids.values)
+    )
     stats = {
         "nombre": len(recents),
         "buts_pour": moyenne_ponderee(recents["ButsPour"], poids),
