@@ -236,6 +236,7 @@ def analyser(
     historique,
     saison_courante,
     afficher_diagnostics=True,
+    minimum_matchs=5,
 ):
     
     date_reference = historique["Date"].max()
@@ -248,7 +249,10 @@ def analyser(
 )
 
 
-    if stats_dom["dom"] < 5 or stats_ext["ext"] < 5:
+    if (
+    stats_dom["dom"] < minimum_matchs
+    or stats_ext["ext"] < minimum_matchs
+):
         return None, (
             "Historique insuffisant : il faut au moins 5 matchs "
             "à domicile pour l'équipe qui reçoit et 5 matchs "
