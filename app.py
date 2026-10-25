@@ -91,8 +91,9 @@ def charger_donnees(code_ligue, code_saison):
 
 
 
+
 def poids_recence(matchs, demi_vie_jours=180, date_reference=None):
-    """Donne plus de poids aux matchs récents avec une date commune."""
+    """Donne plus de poids aux matchs récents."""
     if matchs.empty:
         return pd.Series(dtype=float, index=matchs.index)
 
@@ -107,14 +108,6 @@ def poids_recence(matchs, demi_vie_jours=180, date_reference=None):
 
     return 0.5 ** (age_jours / demi_vie_jours)
 
-    """Poids élevé pour les matchs récents."""
-    if matchs.empty:
-        return pd.Series(dtype=float, index=matchs.index)
-
-    date_max = matchs["Date"].max()
-    age_jours = (date_max - matchs["Date"]).dt.days.clip(lower=0)
-
-    return 0.5 ** (age_jours / demi_vie_jours)
 
 
 def moyenne_ponderee(valeurs, poids):
