@@ -712,6 +712,27 @@ if st.button("🧪 Lancer le backtest", type="primary"):
             else:
                 nombre = len(resultats_test)
                 taux = resultats_test["Correct"].mean()
+                
+# Score de Brier multiclasses pour les probabilités 1N2.
+brier_scores = []
+
+for _, ligne in resultats_test.iterrows():
+    reel = ligne["Issue réelle"]
+
+    cible = {
+        "1": 1 if reel == "1" else 0,
+        "N": 1 if reel == "N" else 0,
+        "2": 1 if reel == "2" else 0,
+    }
+
+    brier = sum(
+        (ligne[f"Probabilité {issue}"] - cible[issue]) ** 2
+        for issue in ["1", "N", "2"]
+    )
+
+    brier_scores.append(brier)
+
+score_brier = sum(brier_scores) / len(brier_scores)
 
                 st.metric("Matchs testés", nombre)
                 st.metric("Prédictions 1N2 correctes", f"{taux:.1%}")
