@@ -223,8 +223,16 @@ def poisson(k, moyenne):
 
 
 def analyser(equipe_dom, equipe_ext, historique, saison_courante):
-    stats_dom = moyenne_buts(equipe_dom, historique)
-    stats_ext = moyenne_buts(equipe_ext, historique)
+    
+    date_reference = historique["Date"].max()
+
+    stats_dom = moyenne_buts(
+    equipe_dom, historique, date_reference
+)
+    stats_ext = moyenne_buts(
+    equipe_ext, historique, date_reference
+)
+
 
     if stats_dom["dom"] < 5 or stats_ext["ext"] < 5:
         return None, (
