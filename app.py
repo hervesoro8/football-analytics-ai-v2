@@ -733,8 +733,17 @@ for _, ligne in resultats_test.iterrows():
 
 score_brier = sum(brier_scores) / len(brier_scores)
 
-                st.metric("Matchs testés", nombre)
-                st.metric("Prédictions 1N2 correctes", f"{taux:.1%}")
+                c1, c2, c3 = st.columns(3)
+
+c1.metric("Matchs testés", nombre)
+c2.metric("Prédictions 1N2 correctes", f"{taux:.1%}")
+c3.metric("Score de Brier 1N2", f"{score_brier:.3f}")
+
+st.caption(
+    "Pour le score de Brier multiclasses, plus le résultat est proche "
+    "de 0, meilleures sont les probabilités. Le score seul ne suffit "
+    "pas : il doit être comparé à une référence."
+    )
 
                 st.subheader("Résultats du test")
                 st.dataframe(
