@@ -530,9 +530,9 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         )
 
         # Les probabilités affichées par l'application sont en pourcentage.
-        p1 = float(resultat["1"]) / 100
-        pn = float(resultat["N"]) / 100
-        p2 = float(resultat["2"]) / 100
+        p1 = float(resultat["1"])
+        pn = float(resultat["N"])
+        p2 = float(resultat["2"])
 
         # Vérifier que les probabilités sont utilisables.
         probabilites = [p1, pn, p2]
