@@ -479,7 +479,7 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "Correct": prediction == issue_reelle,
         })
 
-    st.write("### Diagnostic du backtest")
+        st.write("### Diagnostic du backtest")
     st.write("Matchs examinés :", len(matchs_a_tester))
     st.write("Matchs testés :", len(resultats))
     st.write(
