@@ -392,6 +392,77 @@ def analyser(
     }, None
 
 
+def executer_backtest(matchs_saison, historique, minimum_matchs=5):
+    resultats = []
+
+    matchs_a_tester = (
+        matchs_saison.sort_values("Date")
+        .reset_index(drop=True)
+    )
+
+    for _, match in matchs_a_tester.iterrows():
+        date_match = pd.Timestamp(match["Date"])
+
+        # Aucun résultat du jour même ou du futur n'est utilisé.
+        historique_avant = historique[
+            pd.to_datetime(historique["Date"], errors="coerce")
+            < date_match
+        ].copy()
+
+        if historique_avant.empty:
+            continue
+
+        resultat, erreur = analyser(
+            match["HomeTeam"],
+            match["AwayTeam"],
+            historique_avant,
+            historique_avant,
+            afficher_diagnostics=False,
+        )
+
+        if erreur or resultat is None:
+            continue
+
+        # Le modèle doit avoir assez de matchs dans chaque rôle.
+        stats_dom = resultat["stats_dom"]
+        stats_ext = resultat["stats_ext"]
+
+        if (
+            stats_dom["dom"] < minimum_matchs
+            or stats_ext["ext"] < minimum_matchs
+        ):
+            continue
+
+        buts_dom = int(match["FTHG"])
+        buts_ext = int(match["FTAG"])
+
+        if buts_dom > buts_ext:
+            issue_reelle = "1"
+        elif buts_dom == buts_ext:
+            issue_reelle = "N"
+        else:
+            issue_reelle = "2"
+
+        prediction = max(
+            ["1", "N", "2"],
+            key=lambda cle: resultat[cle],
+        )
+
+        resultats.append({
+            "Date": date_match,
+            "Domicile": match["HomeTeam"],
+            "Extérieur": match["AwayTeam"],
+            "Score réel": f"{buts_dom}-{buts_ext}",
+            "Issue réelle": issue_reelle,
+            "Prédiction": prediction,
+            "Probabilité 1": resultat["1"],
+            "Probabilité N": resultat["N"],
+            "Probabilité 2": resultat["2"],
+            "Correct": prediction == issue_reelle,
+        })
+
+    return pd.DataFrame(resultats)
+
 st.subheader("1. Choisir les données")
 col1, col2 = st.columns(2)
 
