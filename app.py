@@ -594,9 +594,28 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "Log loss référence": log_loss_ref,
 })
 
+    
     df_resultats = pd.DataFrame(resultats)
 
+    # Compatibilité avec les anciennes colonnes utilisées ailleurs.
+    if not df_resultats.empty:
+        correspondances = {
+            "Probabilité 1": "Probabilité 1 (%)",
+            "Probabilité N": "Probabilité N (%)",
+            "Probabilité 2": "Probabilité 2 (%)",
+        }
+
+        for ancien_nom, nouveau_nom in correspondances.items():
+            if (
+                ancien_nom not in df_resultats.columns
+                and nouveau_nom in df_resultats.columns
+            ):
+                df_resultats[ancien_nom] = df_resultats[nouveau_nom]
+
     st.write("### Diagnostic du backtest")
+
+
+    
     st.write("Matchs examinés :", len(matchs_a_tester))
     st.write("Matchs testés :", len(df_resultats))
 
