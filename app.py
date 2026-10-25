@@ -738,7 +738,34 @@ if st.button("🧪 Lancer le backtest", type="primary"):
 
                 score_brier = sum(brier_scores) / len(brier_scores)
 
-                c1, c2, c3 = st.columns(3)
+                # Référence : probabilités égales pour les 3 issues
+                brier_reference = 2 / 3
+                difference_brier = brier_reference - score_brier
+
+                
+                c1, c2, c3, c4 = st.columns(4)
+
+                c1.metric("Matchs testés", nombre)
+                c2.metric(
+                    "Prédictions 1N2 correctes",
+                    f"{taux:.1%}",
+                )
+                c3.metric(
+                    "Brier du modèle",
+                    f"{score_brier:.3f}",
+                )
+                c4.metric(
+                    "Brier de référence",
+                    f"{brier_reference:.3f}",
+                )
+
+                st.caption(
+                    "La référence attribue 1/3 de probabilité à chaque "
+                    "issue (1, N et 2). Un Brier inférieur est préférable, "
+                    "mais cette comparaison seule ne prouve pas la fiabilité "
+                    "du modèle."
+                )
+
 
                 c1.metric("Matchs testés", nombre)
                 c2.metric(
