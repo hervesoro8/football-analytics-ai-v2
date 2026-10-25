@@ -308,6 +308,7 @@ def analyser(
     date_reference=date_reference,
     afficher_diagnostics=afficher_diagnostics,
 )
+    if afficher_diagnostics:
     st.subheader("Vérification des 5 derniers matchs")
     st.write("Matchs de l'équipe à domicile")
     st.dataframe(recents_dom)
