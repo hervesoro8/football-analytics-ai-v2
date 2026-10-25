@@ -299,12 +299,14 @@ def analyser(
     equipe_dom,
     saison_courante,
     date_reference=date_reference,
+    afficher_diagnostics=afficher_diagnostics,
 )
 
     forme_ext, recents_ext = calculer_forme(
     equipe_ext,
     saison_courante,
     date_reference=date_reference,
+    afficher_diagnostics=afficher_diagnostics,
 )
     st.subheader("Vérification des 5 derniers matchs")
     st.write("Matchs de l'équipe à domicile")
