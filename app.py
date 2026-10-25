@@ -646,6 +646,34 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             f"{score_log_loss:.4f}",
         )
 
+        st.write("### Comparaison avec la référence historique")
+
+        col1, col2, col3 = st.columns(3)
+
+        taux_ref = df_resultats["Référence correcte"].mean() * 100
+        brier_ref_moyen = df_resultats["Brier référence"].mean()
+        log_loss_ref_moyen = df_resultats["Log loss référence"].mean()
+
+        col1.metric(
+            "Réussite de la référence",
+            f"{taux_ref:.1f} %",
+            delta=f"{taux_reussite - taux_ref:+.1f} points modèle",
+        )
+
+        col2.metric(
+            "Brier référence",
+            f"{brier_ref_moyen:.4f}",
+            delta=f"{score_brier - brier_ref_moyen:+.4f} modèle",
+            delta_color="inverse",
+        )
+
+        col3.metric(
+            "Log loss référence",
+            f"{log_loss_ref_moyen:.4f}",
+            delta=f"{score_log_loss - log_loss_ref_moyen:+.4f} modèle",
+            delta_color="inverse",
+        )
+
         st.caption(
             "Pour le Brier et le log loss, plus le score est bas, "
             "meilleure est la qualité probabiliste. Compare les scores "
