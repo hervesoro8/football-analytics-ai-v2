@@ -1140,7 +1140,111 @@ if st.button("🧪 Lancer le backtest", type="primary"):
             st.error("Le backtest a rencontré une erreur.")
             st.caption("Détail technique : " + str(erreur))
 
+
+from datetime import date
+
+st.divider()
+st.header("⚽ Matchs via Highlightly")
+st.write("Teste la connexion et consulte les matchs d'une date choisie.")
+
+cle_api = st.secrets.get("HIGHLIGHTLY_API_KEY", "")
+
+if not cle_api:
+    st.warning(
+        "Clé Highlightly introuvable. Vérifie les Secrets de Streamlit."
+    )
+else:
+    date_choisie = st.date_input(
+        "Date des matchs",
+        value=date.today(),
+        key="date_highlightly",
+    )
+
+    if st.button("Charger les matchs", key="bouton_highlightly"):
+        try:
+            reponse = requests.get(
+                "https://soccer.highlightly.net/matches",
+                params={
+                    "date": date_choisie.isoformat(),
+                    "timezone": "Africa/Abidjan",
+                    "limit": 100,
+                },
+                headers={
+                    "x-rapidapi-key": str(cle_api).strip(),
+                },
+                timeout=20,
+            )
+
+            if reponse.status_code == 200:
+                contenu = reponse.json()
+                matchs_api = contenu.get("data", [])
+
+                st.success("Connexion à Highlightly réussie.")
+
+                if not matchs_api:
+                    st.info(
+                        "Aucun match retourné pour cette date. "
+                        "Cela ne signifie pas forcément qu'il n'y a aucun match."
+                    )
+                else:
+                    lignes = []
+
+                    for match in matchs_api:
+                        domicile = match.get("homeTeam") or {}
+                        exterieur = match.get("awayTeam") or {}
+                        ligue_api = match.get("league") or {}
+                        etat = match.get("state") or {}
+                        score = etat.get("score") or {}
+
+                        lignes.append({
+                            "Compétition": ligue_api.get("name", "—"),
+                            "Domicile": domicile.get("name", "—"),
+                            "Extérieur": exterieur.get("name", "—"),
+                            "Date": match.get("date", "—"),
+                            "État": etat.get("description", "—"),
+                            "Score": score.get("current", "—"),
+                        })
+
+                    st.dataframe(
+                        pd.DataFrame(lignes),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+
+                plan = contenu.get("plan", {})
+                if plan.get("message"):
+                    st.caption(str(plan["message"]))
+
+            elif reponse.status_code in (401, 403):
+                st.error(
+                    "Accès refusé. Vérifie ta clé, l'activation de l'API "
+                    "Football et les droits de ton forfait."
+                )
+                st.caption(reponse.text[:300])
+
+            elif reponse.status_code == 429:
+                st.error(
+                    "Quota de requêtes atteint. Réessaie après son renouvellement."
+                )
+
+            else:
+                st.error(
+                    f"Erreur Highlightly : HTTP {reponse.status_code}"
+                )
+                st.caption(reponse.text[:300])
+
+        except requests.Timeout:
+            st.error("Le serveur met trop de temps à répondre.")
+
+        except requests.RequestException as erreur:
+            st.error("Impossible de joindre Highlightly.")
+            st.caption(str(erreur))
+
+        except ValueError:
+            st.error("La réponse reçue n'est pas un JSON valide.")
+
 st.divider()
 st.caption(
-    "Football Analytics AI V2.3 | Données historiques Football-Data.co.uk"
+    "Football Analytics AI V2.3 | Données historiques Football-Data.co.uk "
+    "et connexion Highlightly en test"
 )
