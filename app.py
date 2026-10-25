@@ -680,14 +680,37 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "sur les mêmes matchs et avec une référence simple."
         )
 
+        
         st.write("### Détail des matchs testés")
-        st.dataframe(
-            df_resultats,
-            hide_index=True,
-            use_container_width=True,
-        )
+
+        if not df_resultats.empty:
+            colonnes_disponibles = df_resultats.columns.tolist()
+
+            colonnes_probabilites = [
+                colonne for colonne in colonnes_disponibles
+                if "Probabilité" in colonne
+                or "Brier" in colonne
+                or "Log loss" in colonne
+                or "Référence" in colonne
+            ]
+
+            st.caption(
+                f"{len(df_resultats)} matchs affichés."
+            )
+
+            st.dataframe(
+                df_resultats,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            st.write("### Colonnes disponibles")
+            st.write(", ".join(colonnes_probabilites))
+        else:
+            st.info("Aucun match n'a pu être testé.")
 
     return df_resultats
+
 
 
 
