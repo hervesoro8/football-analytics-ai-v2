@@ -1141,18 +1141,16 @@ if st.button("🧪 Lancer le backtest", type="primary"):
             st.caption("Détail technique : " + str(erreur))
 
 
+
 from datetime import date
 
 st.divider()
-st.header("⚽ Matchs via Highlightly")
-st.write("Teste la connexion et consulte les matchs d'une date choisie.")
+st.header("⚽ Matchs Highlightly et analyse statistique")
 
 cle_api = st.secrets.get("HIGHLIGHTLY_API_KEY", "")
 
 if not cle_api:
-    st.warning(
-        "Clé Highlightly introuvable. Vérifie les Secrets de Streamlit."
-    )
+    st.warning("Clé Highlightly introuvable dans les Secrets Streamlit.")
 else:
     date_choisie = st.date_input(
         "Date des matchs",
@@ -1160,7 +1158,7 @@ else:
         key="date_highlightly",
     )
 
-    if st.button("Charger les matchs", key="bouton_highlightly"):
+    if st.button("📥 Charger les matchs", key="bouton_highlightly"):
         try:
             reponse = requests.get(
                 "https://soccer.highlightly.net/matches",
@@ -1177,74 +1175,125 @@ else:
 
             if reponse.status_code == 200:
                 contenu = reponse.json()
-                matchs_api = contenu.get("data", [])
-
-                st.success("Connexion à Highlightly réussie.")
-
-                if not matchs_api:
-                    st.info(
-                        "Aucun match retourné pour cette date. "
-                        "Cela ne signifie pas forcément qu'il n'y a aucun match."
-                    )
-                else:
-                    lignes = []
-
-                    for match in matchs_api:
-                        domicile = match.get("homeTeam") or {}
-                        exterieur = match.get("awayTeam") or {}
-                        ligue_api = match.get("league") or {}
-                        etat = match.get("state") or {}
-                        score = etat.get("score") or {}
-
-                        lignes.append({
-                            "Compétition": ligue_api.get("name", "—"),
-                            "Domicile": domicile.get("name", "—"),
-                            "Extérieur": exterieur.get("name", "—"),
-                            "Date": match.get("date", "—"),
-                            "État": etat.get("description", "—"),
-                            "Score": score.get("current", "—"),
-                        })
-
-                    st.dataframe(
-                        pd.DataFrame(lignes),
-                        hide_index=True,
-                        use_container_width=True,
-                    )
-
-                plan = contenu.get("plan", {})
-                if plan.get("message"):
-                    st.caption(str(plan["message"]))
-
+                st.session_state["matchs_highlightly"] = contenu.get(
+                    "data", []
+                )
+                st.success("Matchs chargés avec succès.")
             elif reponse.status_code in (401, 403):
-                st.error(
-                    "Accès refusé. Vérifie ta clé, l'activation de l'API "
-                    "Football et les droits de ton forfait."
-                )
-                st.caption(reponse.text[:300])
-
+                st.error("Accès refusé. Vérifie ta clé Highlightly.")
             elif reponse.status_code == 429:
-                st.error(
-                    "Quota de requêtes atteint. Réessaie après son renouvellement."
-                )
-
+                st.error("Quota atteint. Réessaie plus tard.")
             else:
-                st.error(
-                    f"Erreur Highlightly : HTTP {reponse.status_code}"
-                )
-                st.caption(reponse.text[:300])
+                st.error(f"Erreur Highlightly : HTTP {reponse.status_code}")
 
-        except requests.Timeout:
-            st.error("Le serveur met trop de temps à répondre.")
-
-        except requests.RequestException as erreur:
+        except requests.RequestException:
             st.error("Impossible de joindre Highlightly.")
-            st.caption(str(erreur))
-
         except ValueError:
             st.error("La réponse reçue n'est pas un JSON valide.")
 
+matchs_api = st.session_state.get("matchs_highlightly", [])
+
+if matchs_api:
+    correspondances = {}
+
+    lignes = []
+    for i, match in enumerate(matchs_api):
+        domicile = match.get("homeTeam") or {}
+        exterieur = match.get("awayTeam") or {}
+        ligue_api = match.get("league") or {}
+        etat = match.get("state") or {}
+        score = etat.get("score") or {}
+
+        nom_dom = domicile.get("name", "")
+        nom_ext = exterieur.get("name", "")
+        ligue = ligue_api.get("name", "Compétition inconnue")
+        libelle = f"{nom_dom} - {nom_ext} | {ligue}"
+
+        correspondances[libelle] = (nom_dom, nom_ext)
+
+        lignes.append({
+            "Compétition": ligue,
+            "Domicile": nom_dom or "—",
+            "Extérieur": nom_ext or "—",
+            "Date": match.get("date", "—"),
+            "État": etat.get("description", "—"),
+            "Score": score.get("current", "—"),
+        })
+
+    st.subheader("Matchs récupérés")
+    st.dataframe(
+        pd.DataFrame(lignes),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    choix = st.selectbox(
+        "Choisis le match à analyser",
+        list(correspondances.keys()),
+        key="choix_match_highlightly",
+    )
+
+    equipe_dom, equipe_ext = correspondances[choix]
+
+    if st.button("📊 Analyser ce match", key="analyser_match_highlightly"):
+        equipes_historiques = (
+            set(historique["HomeTeam"].dropna().astype(str))
+            | set(historique["AwayTeam"].dropna().astype(str))
+        )
+
+        if equipe_dom not in equipes_historiques or equipe_ext not in equipes_historiques:
+            st.warning(
+                "Une ou deux équipes ne figurent pas dans l'historique "
+                "chargé. Vérifie la compétition sélectionnée plus haut."
+            )
+        elif equipe_dom == equipe_ext:
+            st.warning("Les deux équipes doivent être différentes.")
+        else:
+            resultat, erreur = analyser(
+                equipe_dom,
+                equipe_ext,
+                historique,
+                matchs_saison,
+                afficher_diagnostics=False,
+            )
+
+            if erreur:
+                st.warning(erreur)
+            else:
+                st.subheader("Probabilités estimées")
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("1 — Victoire domicile", f"{resultat['1']:.1%}")
+                c2.metric("N — Match nul", f"{resultat['N']:.1%}")
+                c3.metric("2 — Victoire extérieur", f"{resultat['2']:.1%}")
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Plus de 2,5 buts", f"{resultat['over25']:.1%}")
+                c2.metric("Moins de 2,5 buts", f"{resultat['under25']:.1%}")
+                c3.metric(
+                    "Les deux équipes marquent",
+                    f"{resultat['btts']:.1%}",
+                )
+
+                st.write(
+                    f"Buts attendus : {equipe_dom} "
+                    f"{resultat['lambda_dom']:.2f} — "
+                    f"{resultat['lambda_ext']:.2f} {equipe_ext}"
+                )
+
+                st.subheader("Scores les plus probables")
+                for buts_dom, buts_ext, probabilite in resultat["scores"][:5]:
+                    st.write(
+                        f"{equipe_dom} {buts_dom} - "
+                        f"{buts_ext} {equipe_ext} : {probabilite:.1%}"
+                    )
+
+                st.info(
+                    "Estimations fondées sur les données historiques "
+                    "disponibles. Elles ne garantissent aucun résultat."
+                )
+
 st.divider()
 st.caption(
-    "Football Analytics AI V2.3 | Données historiques Football-Data.co.uk "
-    "et connexion Highlightly en test"
+    "Football Analytics AI V2.3 | Football-Data.co.uk + Highlightly"
 )
