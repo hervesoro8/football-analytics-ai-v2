@@ -712,6 +712,7 @@ if st.button("🧪 Lancer le backtest", type="primary"):
             else:
                 nombre = len(resultats_test)
                 taux = resultats_test["Correct"].mean()
+
 # Score de Brier multiclasses pour les probabilités 1N2.
 brier_scores = []
 
@@ -732,6 +733,7 @@ for _, ligne in resultats_test.iterrows():
     brier_scores.append(brier)
 
 score_brier = sum(brier_scores) / len(brier_scores)
+
 
                 c1, c2, c3 = st.columns(3)
 
