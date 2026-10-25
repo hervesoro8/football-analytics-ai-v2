@@ -1104,6 +1104,7 @@ if st.button("🧪 Lancer le backtest", type="primary"):
                 nombre = len(resultats_test)
                 taux = resultats_test["Correct"].mean()
 
+                
                 # Calcul du score de Brier multiclasses 1N2
                 brier_scores = []
 
@@ -1118,7 +1119,7 @@ if st.button("🧪 Lancer le backtest", type="primary"):
 
                     brier = sum(
                         (
-                            float(ligne[f"Probabilité {issue}"])
+                            float(ligne[f"Probabilité {issue} (%)"]) / 100
                             - cible[issue]
                         ) ** 2
                         for issue in ["1", "N", "2"]
@@ -1126,8 +1127,11 @@ if st.button("🧪 Lancer le backtest", type="primary"):
 
                     brier_scores.append(brier)
 
-                
-                score_brier = sum(brier_scores) / len(brier_scores)
+                score_brier = (
+                    sum(brier_scores) / len(brier_scores)
+                    if brier_scores
+                    else 0
+                )
 
                 # Référence : probabilités égales pour les 3 issues
                 brier_reference = 2 / 3
@@ -1141,11 +1145,11 @@ if st.button("🧪 Lancer le backtest", type="primary"):
                 )
                 c3.metric(
                     "Brier du modèle",
-                    f"{score_brier:.3f}",
+                    f"{score_brier:.4f}",
                 )
                 c4.metric(
                     "Brier de référence",
-                    f"{brier_reference:.3f}",
+                    f"{brier_reference:.4f}",
                 )
 
                 st.caption(
@@ -1154,6 +1158,7 @@ if st.button("🧪 Lancer le backtest", type="primary"):
                     "les probabilités. La référence attribue 1/3 à "
                     "chaque issue."
                 )
+
 
 
 
