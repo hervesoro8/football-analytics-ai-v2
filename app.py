@@ -1459,7 +1459,12 @@ match_id = None
 if matchs_api and choix in correspondances:
     match_id = correspondances[choix].get("id")
 
-if match_id is not None and details.get("match_id") == match_id:
+
+match_id = None
+
+if matchs_api and choix in correspondances:
+    match_id = correspondances[choix].get("id")
+
     st.subheader("Données détaillées fournies par Highlightly")
 
     tab_match, tab_stats, tab_compos = st.tabs(
