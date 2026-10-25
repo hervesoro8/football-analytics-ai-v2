@@ -587,7 +587,12 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "Correct": prediction == issue_reelle,
             "Brier": brier,
             "Log loss": log_loss,
-        })
+        
+            "Prédiction référence": prediction_ref,
+            "Référence correcte": prediction_ref == issue_reelle,
+            "Brier référence": brier_ref,
+            "Log loss référence": log_loss_ref,
+})
 
     df_resultats = pd.DataFrame(resultats)
 
