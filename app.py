@@ -426,11 +426,12 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             continue
 
         resultat, erreur = analyser(
-            match["HomeTeam"],
-            match["AwayTeam"],
-            historique_avant,
-            historique_avant,
-            afficher_diagnostics=False,
+    match["HomeTeam"],
+    match["AwayTeam"],
+    historique_avant,
+    historique_avant,
+    afficher_diagnostics=False,
+    minimum_matchs=3,
         )
 
         if erreur or resultat is None:
