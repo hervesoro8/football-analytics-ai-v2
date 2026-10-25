@@ -696,6 +696,7 @@ st.write(
     "en utilisant uniquement les matchs antérieurs à chaque rencontre."
 )
 
+
 if st.button("🧪 Lancer le backtest", type="primary"):
     with st.spinner("Test des matchs historiques en cours..."):
         try:
@@ -713,39 +714,47 @@ if st.button("🧪 Lancer le backtest", type="primary"):
                 nombre = len(resultats_test)
                 taux = resultats_test["Correct"].mean()
 
-# Score de Brier multiclasses pour les probabilités 1N2.
-brier_scores = []
+                # Calcul du score de Brier multiclasses 1N2
+                brier_scores = []
 
-for _, ligne in resultats_test.iterrows():
-    reel = ligne["Issue réelle"]
+                for _, ligne in resultats_test.iterrows():
+                    reel = ligne["Issue réelle"]
 
-    cible = {
-        "1": 1 if reel == "1" else 0,
-        "N": 1 if reel == "N" else 0,
-        "2": 1 if reel == "2" else 0,
-    }
+                    cible = {
+                        "1": 1 if reel == "1" else 0,
+                        "N": 1 if reel == "N" else 0,
+                        "2": 1 if reel == "2" else 0,
+                    }
 
-    brier = sum(
-        (ligne[f"Probabilité {issue}"] - cible[issue]) ** 2
-        for issue in ["1", "N", "2"]
-    )
+                    brier = sum(
+                        (
+                            float(ligne[f"Probabilité {issue}"])
+                            - cible[issue]
+                        ) ** 2
+                        for issue in ["1", "N", "2"]
+                    )
 
-    brier_scores.append(brier)
+                    brier_scores.append(brier)
 
-score_brier = sum(brier_scores) / len(brier_scores)
-
+                score_brier = sum(brier_scores) / len(brier_scores)
 
                 c1, c2, c3 = st.columns(3)
 
-c1.metric("Matchs testés", nombre)
-c2.metric("Prédictions 1N2 correctes", f"{taux:.1%}")
-c3.metric("Score de Brier 1N2", f"{score_brier:.3f}")
+                c1.metric("Matchs testés", nombre)
+                c2.metric(
+                    "Prédictions 1N2 correctes",
+                    f"{taux:.1%}",
+                )
+                c3.metric(
+                    "Score de Brier 1N2",
+                    f"{score_brier:.3f}",
+                )
 
-st.caption(
-    "Pour le score de Brier multiclasses, plus le résultat est proche "
-    "de 0, meilleures sont les probabilités. Le score seul ne suffit "
-    "pas : il doit être comparé à une référence."
-    )
+                st.caption(
+                    "Pour le score de Brier multiclasses, plus le résultat "
+                    "est proche de 0, meilleures sont les probabilités. "
+                    "Le score doit aussi être comparé à une référence."
+                )
 
                 st.subheader("Résultats du test")
                 st.dataframe(
@@ -755,6 +764,7 @@ st.caption(
                 )
 
                 csv = resultats_test.to_csv(index=False).encode("utf-8")
+
                 st.download_button(
                     "📥 Télécharger les résultats CSV",
                     data=csv,
