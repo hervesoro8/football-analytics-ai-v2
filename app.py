@@ -712,7 +712,6 @@ if st.button("🧪 Lancer le backtest", type="primary"):
             else:
                 nombre = len(resultats_test)
                 taux = resultats_test["Correct"].mean()
-                
 # Score de Brier multiclasses pour les probabilités 1N2.
 brier_scores = []
 
