@@ -230,7 +230,13 @@ def poisson(k, moyenne):
     return math.exp(-moyenne) * moyenne**k / math.factorial(k)
 
 
-def analyser(equipe_dom, equipe_ext, historique, saison_courante):
+def analyser(
+    equipe_dom,
+    equipe_ext,
+    historique,
+    saison_courante,
+    afficher_diagnostics=True,
+):
     
     date_reference = historique["Date"].max()
 
