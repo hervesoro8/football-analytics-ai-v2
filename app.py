@@ -241,12 +241,20 @@ def analyser(equipe_dom, equipe_ext, historique, saison_courante):
             "à l'extérieur pour l'équipe visiteuse."
         )
 
+    
+    poids_ligue = poids_recence(
+    historique,
+    date_reference=date_reference
+)
+
     moy_dom_ligue = moyenne_ponderee(
-        historique["FTHG"], poids_recence(historique)
-    )
+    historique["FTHG"], poids_ligue
+)
+
     moy_ext_ligue = moyenne_ponderee(
-        historique["FTAG"], poids_recence(historique)
-    )
+    historique["FTAG"], poids_ligue
+)
+
 
     valeurs = [
         stats_dom["buts_dom"],
