@@ -309,11 +309,11 @@ def analyser(
     afficher_diagnostics=afficher_diagnostics,
 )
     if afficher_diagnostics:
-    st.subheader("Vérification des 5 derniers matchs")
-    st.write("Matchs de l'équipe à domicile")
-    st.dataframe(recents_dom)
-    st.write("Matchs de l'équipe à l'extérieur")
-    st.dataframe(recents_ext)
+         st.subheader("Vérification des 5 derniers matchs")
+         st.write("Matchs de l'équipe à domicile")
+         st.dataframe(recents_dom)
+         st.write("Matchs de l'équipe à l'extérieur")
+         st.dataframe(recents_ext)
     
 
     lambda_dom = lambda_dom_hist
