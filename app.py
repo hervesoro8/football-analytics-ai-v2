@@ -1448,12 +1448,19 @@ details = st.session_state.get("details_highlightly")
 if not isinstance(details, dict):
     details = {}
 
-if details.get("match_id") == match_id:
-    st.subheader("Données détaillées fournies par Highlightly")
 
-    st.caption(
-        "Les données affichées dépendent du match et des droits de l'API."
-    )
+details = st.session_state.get("details_highlightly")
+
+if not isinstance(details, dict):
+    details = {}
+
+match_id = None
+
+if matchs_api and choix in correspondances:
+    match_id = correspondances[choix].get("id")
+
+if match_id is not None and details.get("match_id") == match_id:
+    st.subheader("Données détaillées fournies par Highlightly")
 
     tab_match, tab_stats, tab_compos = st.tabs(
         ["Fiche du match", "Statistiques", "Compositions"]
@@ -1481,10 +1488,8 @@ if details.get("match_id") == match_id:
         elif details.get("compos") is not None:
             st.json(details["compos"])
         else:
-            st.info(
-                "Aucune composition reçue. "
-                "Les compositions peuvent être publiées plus tard."
-            )
+            st.info("Aucune composition reçue.")
+
 
 st.divider()
 
