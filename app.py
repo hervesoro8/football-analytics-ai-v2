@@ -299,25 +299,28 @@ def analyser(
         0.05, moy_ext_ligue * (attaque_ext + defense_dom) / 2
     )
 
+        # Utiliser tout l'historique disponible pour retrouver
+    # les cinq derniers matchs avant la date de référence.
     forme_dom, recents_dom = calculer_forme(
-    equipe_dom,
-    saison_courante,
-    date_reference=date_reference,
-    afficher_diagnostics=afficher_diagnostics,
-)
+        equipe_dom,
+        historique,
+        date_reference=date_reference,
+        afficher_diagnostics=False,
+    )
 
     forme_ext, recents_ext = calculer_forme(
-    equipe_ext,
-    saison_courante,
-    date_reference=date_reference,
-    afficher_diagnostics=afficher_diagnostics,
-)
+        equipe_ext,
+        historique,
+        date_reference=date_reference,
+        afficher_diagnostics=False,
+    )
+
     if afficher_diagnostics:
-         st.subheader("Vérification des 5 derniers matchs")
-         st.write("Matchs de l'équipe à domicile")
-         st.dataframe(recents_dom)
-         st.write("Matchs de l'équipe à l'extérieur")
-         st.dataframe(recents_ext)
+        st.subheader("Vérification des 5 derniers matchs")
+        st.write("Matchs de l'équipe à domicile")
+        st.dataframe(recents_dom)
+        st.write("Matchs de l'équipe à l'extérieur")
+        st.dataframe(recents_ext)
     
 
     lambda_dom = lambda_dom_hist
