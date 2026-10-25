@@ -1440,54 +1440,49 @@ if matchs_api:
                         )
 
 
-    details = st.session_state.get("details_highlightly", {})
+    
+details = st.session_state.get("details_highlightly")
 
-    if details.get("match_id") == match_id:
-        st.subheader(
-            "Données détaillées fournies par Highlightly"
-        )
+if not isinstance(details, dict):
+    details = {}
 
-        st.caption(
-            "Les statistiques et compositions dépendent du match "
-            "et des droits de l'API. Une donnée absente n'est pas supposée disponible."
-        )
+if details.get("match_id") == match_id:
+    st.subheader("Données détaillées fournies par Highlightly")
 
-        tab_match, tab_stats, tab_compos = st.tabs(
-            ["Fiche du match", "Statistiques", "Compositions"]
-        )
+    st.caption(
+        "Les données affichées dépendent du match et des droits de l'API."
+    )
 
-        with tab_match:
-            if details.get("err_detail"):
-                st.info(details["err_detail"])
+    tab_match, tab_stats, tab_compos = st.tabs(
+        ["Fiche du match", "Statistiques", "Compositions"]
+    )
 
-            elif details.get("detail") is not None:
-                st.json(details["detail"])
+    with tab_match:
+        if details.get("err_detail"):
+            st.info(details["err_detail"])
+        elif details.get("detail") is not None:
+            st.json(details["detail"])
+        else:
+            st.info("Aucune fiche détaillée reçue.")
 
-            else:
-                st.info("Aucune fiche détaillée reçue.")
+    with tab_stats:
+        if details.get("err_stats"):
+            st.info(details["err_stats"])
+        elif details.get("stats") is not None:
+            st.json(details["stats"])
+        else:
+            st.info("Aucune statistique reçue.")
 
-        with tab_stats:
-            if details.get("err_stats"):
-                st.info(details["err_stats"])
-
-            elif details.get("stats") is not None:
-                st.json(details["stats"])
-
-            else:
-                st.info("Aucune statistique reçue.")
-
-        with tab_compos:
-            if details.get("err_compos"):
-                st.info(details["err_compos"])
-
-            elif details.get("compos") is not None:
-                st.json(details["compos"])
-
-            else:
-                st.info(
-                    "Aucune composition reçue. Les compositions peuvent "
-                    "être publiées plus tard."
-                )
+    with tab_compos:
+        if details.get("err_compos"):
+            st.info(details["err_compos"])
+        elif details.get("compos") is not None:
+            st.json(details["compos"])
+        else:
+            st.info(
+                "Aucune composition reçue. "
+                "Les compositions peuvent être publiées plus tard."
+            )
 
 st.divider()
 
@@ -1495,4 +1490,5 @@ st.caption(
     "Football Analytics AI V2.3 | Football-Data.co.uk + Highlightly. "
     "Les données affichées dépendent de la couverture et des droits de l'API."
 )
+
 
