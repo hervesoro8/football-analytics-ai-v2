@@ -398,6 +398,7 @@ def analyser(
 
 
 
+
 def executer_backtest(matchs_saison, historique, minimum_matchs=5):
     resultats = []
     details_erreurs = []
@@ -406,6 +407,7 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         "historique_insuffisant": 0,
         "analyse_impossible": 0,
         "historique_equipes_insuffisant": 0,
+        "donnees_manquantes": 0,
     }
 
     matchs_a_tester = (
@@ -413,12 +415,27 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         .reset_index(drop=True)
     )
 
-    for _, match in matchs_a_tester.iterrows():
-        date_match = pd.Timestamp(match["Date"])
+    historique = historique.copy()
+    historique["Date"] = pd.to_datetime(
+        historique["Date"], errors="coerce"
+    )
 
+    for _, match in matchs_a_tester.iterrows():
+        date_match = pd.to_datetime(
+            match["Date"], errors="coerce"
+        )
+
+        if pd.isna(date_match):
+            non_testes["donnees_manquantes"] += 1
+            continue
+
+        if pd.isna(match["FTHG"]) or pd.isna(match["FTAG"]):
+            non_testes["donnees_manquantes"] += 1
+            continue
+
+        # Utiliser uniquement les matchs antérieurs à celui prédit.
         historique_avant = historique[
-            pd.to_datetime(historique["Date"], errors="coerce")
-            < date_match
+            historique["Date"] < date_match
         ].copy()
 
         if historique_avant.empty:
@@ -426,12 +443,12 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             continue
 
         resultat, erreur = analyser(
-    match["HomeTeam"],
-    match["AwayTeam"],
-    historique_avant,
-    historique_avant,
-    afficher_diagnostics=False,
-    minimum_matchs=3,
+            match["HomeTeam"],
+            match["AwayTeam"],
+            historique_avant,
+            historique_avant,
+            afficher_diagnostics=False,
+            minimum_matchs=3,
         )
 
         if erreur or resultat is None:
@@ -440,9 +457,7 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
                 "Date": date_match,
                 "Domicile": match["HomeTeam"],
                 "Extérieur": match["AwayTeam"],
-                "Erreur": (
-                    str(erreur) if erreur else "Résultat vide"
-                ),
+                "Erreur": str(erreur) if erreur else "Résultat vide",
             })
             continue
 
@@ -466,9 +481,52 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         else:
             issue_reelle = "2"
 
+        # Les probabilités affichées par l'application sont en pourcentage.
+        p1 = float(resultat["1"]) / 100
+        pn = float(resultat["N"]) / 100
+        p2 = float(resultat["2"]) / 100
+
+        # Vérifier que les probabilités sont utilisables.
+        probabilites = [p1, pn, p2]
+
+        if (
+            any(not math.isfinite(p) or p < 0 or p > 1
+                for p in probabilites)
+            or sum(probabilites) <= 0
+        ):
+            non_testes["analyse_impossible"] += 1
+            continue
+
+        # Normaliser pour que les trois probabilités totalisent 1.
+        total = sum(probabilites)
+        p1, pn, p2 = [p / total for p in probabilites]
+
         prediction = max(
             ["1", "N", "2"],
             key=lambda cle: resultat[cle],
+        )
+
+        y1 = 1 if issue_reelle == "1" else 0
+        yn = 1 if issue_reelle == "N" else 0
+        y2 = 1 if issue_reelle == "2" else 0
+
+        # Score de Brier multicatégorie : plus bas = meilleur.
+        brier = (
+            (p1 - y1) ** 2
+            + (pn - yn) ** 2
+            + (p2 - y2) ** 2
+        )
+
+        # Log loss : plus bas = meilleur.
+        epsilon = 1e-15
+        probabilite_issue_reelle = {
+            "1": p1,
+            "N": pn,
+            "2": p2,
+        }[issue_reelle]
+
+        log_loss = -math.log(
+            max(epsilon, probabilite_issue_reelle)
         )
 
         resultats.append({
@@ -478,27 +536,35 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "Score réel": f"{buts_dom}-{buts_ext}",
             "Issue réelle": issue_reelle,
             "Prédiction": prediction,
-            "Probabilité 1": resultat["1"],
-            "Probabilité N": resultat["N"],
-            "Probabilité 2": resultat["2"],
+            "Probabilité 1 (%)": round(p1 * 100, 1),
+            "Probabilité N (%)": round(pn * 100, 1),
+            "Probabilité 2 (%)": round(p2 * 100, 1),
             "Correct": prediction == issue_reelle,
+            "Brier": brier,
+            "Log loss": log_loss,
         })
 
-        
+    df_resultats = pd.DataFrame(resultats)
+
     st.write("### Diagnostic du backtest")
     st.write("Matchs examinés :", len(matchs_a_tester))
-    st.write("Matchs testés :", len(resultats))
+    st.write("Matchs testés :", len(df_resultats))
+
     st.write(
-        "Exclus : historique vide :",
+        "Exclus — historique vide :",
         non_testes["historique_insuffisant"],
     )
     st.write(
-        "Exclus : analyse impossible :",
+        "Exclus — analyse impossible :",
         non_testes["analyse_impossible"],
     )
     st.write(
-        "Exclus : historique des équipes insuffisant :",
+        "Exclus — historique des équipes insuffisant :",
         non_testes["historique_equipes_insuffisant"],
+    )
+    st.write(
+        "Exclus — date ou score manquant :",
+        non_testes["donnees_manquantes"],
     )
 
     if details_erreurs:
@@ -509,7 +575,42 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             use_container_width=True,
         )
 
-    return pd.DataFrame(resultats)
+    if not df_resultats.empty:
+        taux_reussite = df_resultats["Correct"].mean() * 100
+        score_brier = df_resultats["Brier"].mean()
+        score_log_loss = df_resultats["Log loss"].mean()
+
+        st.write("### Mesure des performances")
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "Bonnes prédictions 1N2",
+            f"{taux_reussite:.1f} %",
+        )
+        col2.metric(
+            "Score de Brier",
+            f"{score_brier:.4f}",
+        )
+        col3.metric(
+            "Log loss",
+            f"{score_log_loss:.4f}",
+        )
+
+        st.caption(
+            "Pour le Brier et le log loss, plus le score est bas, "
+            "meilleure est la qualité probabiliste. Compare les scores "
+            "sur les mêmes matchs et avec une référence simple."
+        )
+
+        st.write("### Détail des matchs testés")
+        st.dataframe(
+            df_resultats,
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    return df_resultats
+
 
 
 
