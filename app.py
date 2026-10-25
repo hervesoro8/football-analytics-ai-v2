@@ -689,6 +689,60 @@ if st.button("📊 Calculer les probabilités", type="primary"):
         )
 
 st.divider()
+st.subheader("8. Test historique du modèle")
+
+st.write(
+    "Le test compare les prédictions aux résultats réels, "
+    "en utilisant uniquement les matchs antérieurs à chaque rencontre."
+)
+
+if st.button("🧪 Lancer le backtest", type="primary"):
+    with st.spinner("Test des matchs historiques en cours..."):
+        try:
+            resultats_test = executer_backtest(
+                matchs_saison,
+                historique,
+            )
+
+            if resultats_test.empty:
+                st.warning(
+                    "Aucun match n'a pu être testé. "
+                    "Il faut davantage de résultats historiques."
+                )
+            else:
+                nombre = len(resultats_test)
+                taux = resultats_test["Correct"].mean()
+
+                st.metric("Matchs testés", nombre)
+                st.metric("Prédictions 1N2 correctes", f"{taux:.1%}")
+
+                st.subheader("Résultats du test")
+                st.dataframe(
+                    resultats_test,
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+                csv = resultats_test.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Télécharger les résultats CSV",
+                    data=csv,
+                    file_name="backtest_football.csv",
+                    mime="text/csv",
+                )
+
+                st.caption(
+                    "Un taux de réussite historique ne garantit pas "
+                    "les performances futures. Ce premier test mesure "
+                    "les prédictions 1N2 ; il ne constitue pas encore "
+                    "une validation complète du modèle."
+                )
+
+        except Exception as erreur:
+            st.error("Le backtest a rencontré une erreur.")
+            st.caption("Détail technique : " + str(erreur))
+
+st.divider()
 st.caption(
     "Football Analytics AI V2.3 | Données historiques Football-Data.co.uk"
 )
