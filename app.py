@@ -178,18 +178,32 @@ def derniers_matchs(equipe, matchs, nombre=5):
     return historique.head(nombre).reset_index(drop=True)
 
 
-def calculer_forme(equipe, matchs):
-    recents = derniers_matchs(equipe, matchs, 5)
+
+def calculer_forme(equipe, matchs, date_reference=None, afficher_diagnostics=True):
+    matchs_avant = matchs.copy()
+
+    # Ne garder que les matchs antérieurs à la date de référence.
+    if date_reference is not None:
+        matchs_avant = matchs_avant[
+            pd.to_datetime(matchs_avant["Date"], errors="coerce")
+            < pd.Timestamp(date_reference)
+        ].copy()
+
+    recents = derniers_matchs(equipe, matchs_avant, 5)
 
     if recents.empty:
         return None, recents
 
     poids = poids_recence(recents, demi_vie_jours=60)
-    st.write("Diagnostic des pondérations")
-    st.dataframe(
-    recents[["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]]
-    .assign(Poids=poids.values)
-    )
+
+    if afficher_diagnostics:
+        st.write("Diagnostic des pondérations")
+        st.dataframe(
+            recents[
+                ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]
+            ].assign(Poids=poids.values)
+        )
+
     stats = {
         "nombre": len(recents),
         "buts_pour": moyenne_ponderee(recents["ButsPour"], poids),
@@ -206,6 +220,7 @@ def calculer_forme(equipe, matchs):
     }
 
     return stats, recents
+
 
 
 def poisson(k, moyenne):
