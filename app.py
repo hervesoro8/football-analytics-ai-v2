@@ -395,6 +395,7 @@ def analyser(
 
 def executer_backtest(matchs_saison, historique, minimum_matchs=5):
     resultats = []
+details_erreurs = []
     non_testes = {
         "historique_insuffisant": 0,
         "analyse_impossible": 0,
@@ -427,8 +428,14 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         )
 
         if erreur or resultat is None:
-            non_testes["analyse_impossible"] += 1
-            continue
+    non_testes["analyse_impossible"] += 1
+    details_erreurs.append({
+        "Date": date_match,
+        "Domicile": match["HomeTeam"],
+        "Extérieur": match["AwayTeam"],
+        "Erreur": str(erreur) if erreur else "Résultat vide",
+    })
+    continue
 
         stats_dom = resultat["stats_dom"]
         stats_ext = resultat["stats_ext"]
@@ -483,7 +490,13 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         "Exclus : historique des équipes insuffisant :",
         non_testes["historique_equipes_insuffisant"],
     )
-
+    if details_erreurs:
+        st.write("### Détail des erreurs d'analyse")
+        st.dataframe(
+            pd.DataFrame(details_erreurs).head(10),
+            hide_index=True,
+            use_container_width=True,
+        )
     return pd.DataFrame(resultats)
 
 
