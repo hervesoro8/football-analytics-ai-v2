@@ -729,6 +729,125 @@ if st.button("📊 Calculer les probabilités", type="primary"):
         )
 
         st.subheader("7. Limites")
+                st.subheader("7. Cotes du bookmaker et valeur théorique")
+
+        st.caption(
+            "Saisis les cotes décimales actuelles de ton bookmaker. "
+            "Les cotes ne sont pas récupérées automatiquement."
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            cote_1 = st.number_input(
+                f"Cote victoire {equipe_dom}",
+                min_value=1.01,
+                value=2.10,
+                step=0.05,
+                key="cote_1",
+            )
+
+        with col2:
+            cote_n = st.number_input(
+                "Cote du match nul",
+                min_value=1.01,
+                value=3.50,
+                step=0.05,
+                key="cote_n",
+            )
+
+        with col3:
+            cote_2 = st.number_input(
+                f"Cote victoire {equipe_ext}",
+                min_value=1.01,
+                value=3.15,
+                step=0.05,
+                key="cote_2",
+            )
+
+        probabilites_modele = {
+            "1": resultat["1"],
+            "N": resultat["N"],
+            "2": resultat["2"],
+        }
+
+        cotes = {
+            "1": cote_1,
+            "N": cote_n,
+            "2": cote_2,
+        }
+
+        implicites = {
+            issue: 1 / cote
+            for issue, cote in cotes.items()
+        }
+
+        somme_implicites = sum(implicites.values())
+        marge = somme_implicites - 1
+
+        st.metric("Marge théorique du bookmaker", f"{marge:.2%}")
+
+        lignes = []
+
+        for issue, nom in [
+            ("1", f"Victoire {equipe_dom}"),
+            ("N", "Match nul"),
+            ("2", f"Victoire {equipe_ext}"),
+        ]:
+            cote = cotes[issue]
+            proba_modele = probabilites_modele[issue]
+            proba_brute = implicites[issue]
+            proba_marche = proba_brute / somme_implicites
+            valeur_theorique = proba_modele * cote - 1
+
+            lignes.append({
+                "Résultat": nom,
+                "Cote": round(cote, 2),
+                "Modèle": f"{proba_modele:.1%}",
+                "Marché corrigé": f"{proba_marche:.1%}",
+                "Écart modèle-marché": (
+                    f"{(proba_modele - proba_marche) * 100:+.1f} points"
+                ),
+                "Valeur théorique": f"{valeur_theorique:+.1%}",
+            })
+
+        st.dataframe(
+            pd.DataFrame(lignes),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        st.caption(
+            "Valeur théorique = probabilité du modèle × cote − 1. "
+            "Elle n'est pertinente que si la probabilité du modèle "
+            "est suffisamment fiable. Une valeur positive ne garantit "
+            "ni un gain ni un avantage réel."
+        )
+
+        st.subheader("8. Vérification des absences et actualités")
+
+        st.write(
+            "Vérifie les informations récentes auprès de sources fiables "
+            "avant de les saisir ici."
+        )
+
+        absences_dom = st.text_area(
+            f"Absences vérifiées — {equipe_dom}",
+            placeholder="Joueurs absents, suspendus ou incertains...",
+            key="absences_dom",
+        )
+
+        absences_ext = st.text_area(
+            f"Absences vérifiées — {equipe_ext}",
+            placeholder="Joueurs absents, suspendus ou incertains...",
+            key="absences_ext",
+        )
+
+        if absences_dom.strip() or absences_ext.strip():
+            st.info(
+                "Absences saisies manuellement. Elles ne modifient pas "
+                "encore les probabilités calculées par le modèle."
+        )
         st.warning(
             "Le modèle n'intègre pas automatiquement les blessures, "
             "les suspensions, les compositions officielles, les cotes "
