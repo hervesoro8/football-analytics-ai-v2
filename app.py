@@ -392,8 +392,14 @@ def analyser(
     }, None
 
 
+
 def executer_backtest(matchs_saison, historique, minimum_matchs=5):
     resultats = []
+    non_testes = {
+        "historique_insuffisant": 0,
+        "analyse_impossible": 0,
+        "historique_equipes_insuffisant": 0,
+    }
 
     matchs_a_tester = (
         matchs_saison.sort_values("Date")
@@ -403,13 +409,13 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
     for _, match in matchs_a_tester.iterrows():
         date_match = pd.Timestamp(match["Date"])
 
-        # Aucun résultat du jour même ou du futur n'est utilisé.
         historique_avant = historique[
             pd.to_datetime(historique["Date"], errors="coerce")
             < date_match
         ].copy()
 
         if historique_avant.empty:
+            non_testes["historique_insuffisant"] += 1
             continue
 
         resultat, erreur = analyser(
@@ -421,9 +427,9 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         )
 
         if erreur or resultat is None:
+            non_testes["analyse_impossible"] += 1
             continue
 
-        # Le modèle doit avoir assez de matchs dans chaque rôle.
         stats_dom = resultat["stats_dom"]
         stats_ext = resultat["stats_ext"]
 
@@ -431,6 +437,7 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             stats_dom["dom"] < minimum_matchs
             or stats_ext["ext"] < minimum_matchs
         ):
+            non_testes["historique_equipes_insuffisant"] += 1
             continue
 
         buts_dom = int(match["FTHG"])
@@ -461,7 +468,24 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
             "Correct": prediction == issue_reelle,
         })
 
+    st.write("### Diagnostic du backtest")
+    st.write("Matchs examinés :", len(matchs_a_tester))
+    st.write("Matchs testés :", len(resultats))
+    st.write(
+        "Exclus : historique vide :",
+        non_testes["historique_insuffisant"],
+    )
+    st.write(
+        "Exclus : analyse impossible :",
+        non_testes["analyse_impossible"],
+    )
+    st.write(
+        "Exclus : historique des équipes insuffisant :",
+        non_testes["historique_equipes_insuffisant"],
+    )
+
     return pd.DataFrame(resultats)
+
 
 st.subheader("1. Choisir les données")
 col1, col2 = st.columns(2)
