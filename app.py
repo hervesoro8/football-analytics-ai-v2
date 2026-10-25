@@ -481,6 +481,51 @@ def executer_backtest(matchs_saison, historique, minimum_matchs=5):
         else:
             issue_reelle = "2"
 
+        # Référence simple : fréquences historiques avant le match.
+        hist = historique_avant.dropna(
+            subset=["FTHG", "FTAG"]
+        ).copy()
+
+        if hist.empty:
+            non_testes["historique_insuffisant"] += 1
+            continue
+
+        victoires_dom = (hist["FTHG"] > hist["FTAG"]).sum()
+        nuls = (hist["FTHG"] == hist["FTAG"]).sum()
+        victoires_ext = (hist["FTHG"] < hist["FTAG"]).sum()
+
+        # Lissage pour éviter les probabilités égales à zéro.
+        n_hist = len(hist)
+        ref_1 = (victoires_dom + 1) / (n_hist + 3)
+        ref_n = (nuls + 1) / (n_hist + 3)
+        ref_2 = (victoires_ext + 1) / (n_hist + 3)
+
+        prediction_ref = max(
+            [("1", ref_1), ("N", ref_n), ("2", ref_2)],
+            key=lambda element: element[1],
+        )[0]
+
+        y1 = 1 if issue_reelle == "1" else 0
+        yn = 1 if issue_reelle == "N" else 0
+        y2 = 1 if issue_reelle == "2" else 0
+
+        brier_ref = (
+            (ref_1 - y1) ** 2
+            + (ref_n - yn) ** 2
+            + (ref_2 - y2) ** 2
+        )
+
+        epsilon = 1e-15
+        prob_ref_reelle = {
+            "1": ref_1,
+            "N": ref_n,
+            "2": ref_2,
+        }[issue_reelle]
+
+        log_loss_ref = -math.log(
+            max(epsilon, prob_ref_reelle)
+        )
+
         # Les probabilités affichées par l'application sont en pourcentage.
         p1 = float(resultat["1"]) / 100
         pn = float(resultat["N"]) / 100
