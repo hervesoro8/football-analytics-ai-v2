@@ -1126,13 +1126,12 @@ if st.button("🧪 Lancer le backtest", type="primary"):
 
                     brier_scores.append(brier)
 
+                
                 score_brier = sum(brier_scores) / len(brier_scores)
 
                 # Référence : probabilités égales pour les 3 issues
                 brier_reference = 2 / 3
-                difference_brier = brier_reference - score_brier
 
-                
                 c1, c2, c3, c4 = st.columns(4)
 
                 c1.metric("Matchs testés", nombre)
@@ -1150,28 +1149,13 @@ if st.button("🧪 Lancer le backtest", type="primary"):
                 )
 
                 st.caption(
-                    "La référence attribue 1/3 de probabilité à chaque "
-                    "issue (1, N et 2). Un Brier inférieur est préférable, "
-                    "mais cette comparaison seule ne prouve pas la fiabilité "
-                    "du modèle."
+                    "Le score de Brier multiclasses varie généralement "
+                    "entre 0 et 2. Plus il est faible, meilleures sont "
+                    "les probabilités. La référence attribue 1/3 à "
+                    "chaque issue."
                 )
 
 
-                c1.metric("Matchs testés", nombre)
-                c2.metric(
-                    "Prédictions 1N2 correctes",
-                    f"{taux:.1%}",
-                )
-                c3.metric(
-                    "Score de Brier 1N2",
-                    f"{score_brier:.3f}",
-                )
-
-                st.caption(
-                    "Pour le score de Brier multiclasses, plus le résultat "
-                    "est proche de 0, meilleures sont les probabilités. "
-                    "Le score doit aussi être comparé à une référence."
-                )
 
                 st.subheader("Résultats du test")
                 st.dataframe(
