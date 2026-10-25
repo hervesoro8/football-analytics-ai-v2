@@ -130,12 +130,17 @@ def moyenne_ponderee(valeurs, poids):
     )
 
 
-def moyenne_buts(equipe, matchs):
+
+def moyenne_buts(equipe, matchs, date_reference=None):
     dom = matchs[matchs["HomeTeam"] == equipe].copy()
     ext = matchs[matchs["AwayTeam"] == equipe].copy()
 
-    poids_dom = poids_recence(dom)
-    poids_ext = poids_recence(ext)
+    poids_dom = poids_recence(
+        dom, date_reference=date_reference
+    )
+    poids_ext = poids_recence(
+        ext, date_reference=date_reference
+    )
 
     return {
         "dom": len(dom),
@@ -145,6 +150,7 @@ def moyenne_buts(equipe, matchs):
         "buts_ext": moyenne_ponderee(ext["FTAG"], poids_ext),
         "encaisses_ext": moyenne_ponderee(ext["FTHG"], poids_ext),
     }
+
 
 
 def derniers_matchs(equipe, matchs, nombre=5):
