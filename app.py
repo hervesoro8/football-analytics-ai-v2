@@ -1397,10 +1397,12 @@ if matchs_api:
                     )
 
     with droite:
-        if st.button(
-            "🔎 Charger les données détaillées réelles",
-            key="details_highlightly",
-        ):
+        
+if st.button(
+    "🔎 Charger les données détaillées réelles",
+    key="bouton_charger_details_highlightly",
+):
+
             if not match_id:
                 st.error(
                     "Highlightly n'a pas fourni d'identifiant pour ce match."
