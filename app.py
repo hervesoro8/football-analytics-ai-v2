@@ -729,7 +729,7 @@ if st.button("📊 Calculer les probabilités", type="primary"):
         )
 
         st.subheader("7. Limites")
-                st.subheader("7. Cotes du bookmaker et valeur théorique")
+        st.subheader("7. Cotes du bookmaker et valeur théorique")
 
         st.caption(
             "Saisis les cotes décimales actuelles de ton bookmaker. "
@@ -739,7 +739,7 @@ if st.button("📊 Calculer les probabilités", type="primary"):
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            cote_1 = st.number_input(
+             cote_1 = st.number_input(
                 f"Cote victoire {equipe_dom}",
                 min_value=1.01,
                 value=2.10,
@@ -748,7 +748,7 @@ if st.button("📊 Calculer les probabilités", type="primary"):
             )
 
         with col2:
-            cote_n = st.number_input(
+             cote_n = st.number_input(
                 "Cote du match nul",
                 min_value=1.01,
                 value=3.50,
@@ -757,7 +757,7 @@ if st.button("📊 Calculer les probabilités", type="primary"):
             )
 
         with col3:
-            cote_2 = st.number_input(
+             cote_2 = st.number_input(
                 f"Cote victoire {equipe_ext}",
                 min_value=1.01,
                 value=3.15,
