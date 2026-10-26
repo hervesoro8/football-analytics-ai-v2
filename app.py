@@ -1656,7 +1656,7 @@ if (
             "Clique sur « Charger les données détaillées réelles » "
             "pour afficher les informations du match sélectionné."
         )
-</>
+
 
 
     tab_match, tab_stats, tab_compos = st.tabs(
