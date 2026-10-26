@@ -1445,180 +1445,6 @@ if matchs_api:
     
 details = st.session_state.get("details_highlightly")
 
-if not isinstance(details, dict):
-    details = {}
-
-
-details = st.session_state.get("details_highlightly")
-
-if not isinstance(details, dict):
-    details = {}
-
-match_id = None
-
-if matchs_api and choix in correspondances:
-    match_id = correspondances[choix].get("id")
-
-
-match_id = None
-
-if matchs_api and choix in correspondances:
-    match_id = correspondances[choix].get("id")
-
-    
-# ---------------------------------------------------------
-# AFFICHAGE LISIBLE DES DONNEES DETAILLEES HIGHLIGHTLY
-# ---------------------------------------------------------
-
-def nom_lisible(cle):
-    """Transforme les noms techniques en libellés français."""
-    traductions = {
-        "homeTeam": "Équipe à domicile",
-        "awayTeam": "Équipe à l'extérieur",
-        "home": "Domicile",
-        "away": "Extérieur",
-        "name": "Nom",
-        "team": "Équipe",
-        "player": "Joueur",
-        "players": "Joueurs",
-        "coach": "Entraîneur",
-        "formation": "Formation",
-        "lineups": "Compositions",
-        "statistics": "Statistiques",
-        "goals": "Buts",
-        "score": "Score",
-        "status": "Statut du match",
-        "minute": "Minute",
-        "date": "Date",
-        "time": "Heure",
-        "venue": "Stade",
-        "referee": "Arbitre",
-        "possession": "Possession (%)",
-        "shots": "Tirs",
-        "shotsOnTarget": "Tirs cadrés",
-        "corners": "Corners",
-        "fouls": "Fautes",
-        "yellowCards": "Cartons jaunes",
-        "redCards": "Cartons rouges",
-        "offsides": "Hors-jeu",
-        "passes": "Passes",
-        "accuracy": "Précision (%)",
-        "prediction": "Prédiction",
-        "predictions": "Prédictions",
-        "probability": "Probabilité",
-        "probabilities": "Probabilités",
-        "homeWin": "Victoire domicile",
-        "draw": "Match nul",
-        "awayWin": "Victoire extérieur",
-        "id": "Identifiant",
-        "country": "Pays",
-        "league": "Championnat",
-        "round": "Journée",
-        "season": "Saison",
-    }
-
-    if cle in traductions:
-        return traductions[cle]
-
-    return str(cle).replace("_", " ").replace("-", " ").capitalize()
-
-
-def valeur_lisible(valeur):
-    """Convertit les valeurs techniques en texte compréhensible."""
-    if valeur is None:
-        return "Non disponible"
-
-    if isinstance(valeur, bool):
-        return "Oui" if valeur else "Non"
-
-    if isinstance(valeur, (int, float, str)):
-        texte = str(valeur)
-
-        # Traduction de quelques statuts fréquents
-        statuts = {
-            "SCHEDULED": "À venir",
-            "LIVE": "En cours",
-            "IN_PLAY": "En cours",
-            "FINISHED": "Terminé",
-            "FT": "Terminé",
-            "POSTPONED": "Reporté",
-            "CANCELLED": "Annulé",
-            "HOME": "Domicile",
-            "AWAY": "Extérieur",
-            "DRAW": "Match nul",
-        }
-
-        return statuts.get(texte.upper(), texte)
-
-    return None
-
-
-def afficher_donnees_lisibles(donnees, profondeur=0):
-    """Affiche les données en sections lisibles, sans JSON brut."""
-
-    if profondeur > 5:
-        st.caption("Informations supplémentaires disponibles.")
-        return
-
-    if isinstance(donnees, dict):
-        for cle, valeur in donnees.items():
-            libelle = nom_lisible(cle)
-
-            if isinstance(valeur, dict):
-                with st.expander(libelle, expanded=(profondeur == 0)):
-                    afficher_donnees_lisibles(valeur, profondeur + 1)
-
-            elif isinstance(valeur, list):
-                if not valeur:
-                    continue
-
-                with st.expander(
-                    f"{libelle} ({len(valeur)} élément(s))",
-                    expanded=False
-                ):
-                    afficher_donnees_lisibles(valeur, profondeur + 1)
-
-            else:
-                texte = valeur_lisible(valeur)
-
-                # Ne pas afficher les identifiants techniques
-                if str(cle).lower() in {
-                    "id", "matchid", "teamid", "playerid",
-                    "leagueid", "countryid"
-                }:
-                    continue
-
-                if texte is not None:
-                    st.markdown(f"**{libelle} :** {texte}")
-
-    elif isinstance(donnees, list):
-        for index, element in enumerate(donnees):
-            if isinstance(element, dict):
-                titre = (
-                    element.get("name")
-                    or element.get("player", {}).get("name")
-                    if isinstance(element.get("player"), dict)
-                    else element.get("name")
-                )
-
-                with st.expander(
-                    str(titre or f"Élément {index + 1}"),
-                    expanded=False
-                ):
-                    afficher_donnees_lisibles(element, profondeur + 1)
-
-            elif isinstance(element, list):
-                afficher_donnees_lisibles(element, profondeur + 1)
-
-            else:
-                texte = valeur_lisible(element)
-                if texte is not None:
-                    st.write(f"- {texte}")
-
-
-# Afficher les détails uniquement pour le match sélectionné
-details = st.session_state.get("details_highlightly")
-
 if (
     isinstance(details, dict)
     and details
@@ -1631,33 +1457,30 @@ if (
     if str(match_id_details) == str(match_id_selectionne):
         st.subheader("📊 Détails du match")
 
-        if details.get("match"):
+        if details.get("detail") is not None:
             st.markdown("### ⚽ Informations sur le match")
-            afficher_donnees_lisibles(details["match"])
+            afficher_donnees_lisibles(details["detail"])
 
-        if details.get("statistics"):
+        if details.get("stats") is not None:
             st.markdown("### 📈 Statistiques")
-            afficher_donnees_lisibles(details["statistics"])
+            afficher_donnees_lisibles(details["stats"])
 
-        if details.get("lineups"):
+        if details.get("compos") is not None:
             st.markdown("### 👥 Compositions des équipes")
-            afficher_donnees_lisibles(details["lineups"])
+            afficher_donnees_lisibles(details["compos"])
 
         if not any(
-            details.get(cle)
-            for cle in ("match", "statistics", "lineups")
+            details.get(cle) is not None
+            for cle in ("detail", "stats", "compos")
         ):
             st.info(
-                "Les données détaillées ont été chargées, "
-                "mais leur contenu n'est pas disponible dans le format attendu."
+                "Les données détaillées sont indisponibles pour ce match."
             )
     else:
         st.info(
             "Clique sur « Charger les données détaillées réelles » "
-            "pour afficher les informations du match sélectionné."
+            "pour charger les informations du match sélectionné."
         )
-
-
 
     tab_match, tab_stats, tab_compos = st.tabs(
         ["Fiche du match", "Statistiques", "Compositions"]
@@ -1667,7 +1490,7 @@ if (
         if details.get("err_detail"):
             st.info(details["err_detail"])
         elif details.get("detail") is not None:
-            st.json(details["detail"])
+            afficher_donnees_lisibles(details["detail"])
         else:
             st.info("Aucune fiche détaillée reçue.")
 
@@ -1675,7 +1498,7 @@ if (
         if details.get("err_stats"):
             st.info(details["err_stats"])
         elif details.get("stats") is not None:
-            st.json(details["stats"])
+            afficher_donnees_lisibles(details["stats"])
         else:
             st.info("Aucune statistique reçue.")
 
@@ -1683,10 +1506,9 @@ if (
         if details.get("err_compos"):
             st.info(details["err_compos"])
         elif details.get("compos") is not None:
-            st.json(details["compos"])
+            afficher_donnees_lisibles(details["compos"])
         else:
             st.info("Aucune composition reçue.")
-
 
 st.divider()
 
