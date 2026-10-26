@@ -1455,6 +1455,16 @@ if (
     match_id_selectionne = correspondances[choix].get("id")
     match_id_details = details.get("match_id")
 
+    
+if (
+    isinstance(details, dict)
+    and details
+    and matchs_api
+    and choix in correspondances
+):
+    match_id_selectionne = correspondances[choix].get("id")
+    match_id_details = details.get("match_id")
+
     if str(match_id_details) == str(match_id_selectionne):
         st.subheader("📊 Détails du match")
 
@@ -1465,32 +1475,53 @@ if (
         with tab_match:
             if details.get("err_detail"):
                 st.warning(details["err_detail"])
-            elif details.get("detail") is not None:
+            elif details.get("detail"):
+                st.success("Fiche du match reçue.")
                 st.json(details["detail"])
             else:
-                st.info("Aucune fiche détaillée reçue.")
+                st.info("La fiche détaillée n'est pas disponible.")
 
         with tab_stats:
             if details.get("err_stats"):
                 st.warning(details["err_stats"])
-            elif details.get("stats") is not None:
-                st.json(details["stats"])
             else:
-                st.info("Aucune statistique reçue.")
+                stats = details.get("stats")
+
+                if stats:
+                    st.success("Données statistiques reçues.")
+                    st.json(stats)
+                else:
+                    st.info(
+                        "Aucune statistique reçue pour ce match. "
+                        "Les probabilités du modèle ne sont pas modifiées."
+                    )
 
         with tab_compos:
             if details.get("err_compos"):
                 st.warning(details["err_compos"])
-            elif details.get("compos") is not None:
-                st.json(details["compos"])
             else:
-                st.info("Aucune composition reçue.")
+                compos = details.get("compos")
+
+                if compos:
+                    st.success("Données de composition reçues.")
+                    st.json(compos)
+                else:
+                    st.info(
+                        "Aucune composition reçue. "
+                        "Ne considère pas les titulaires comme confirmés."
+                    )
+
+        st.caption(
+            "Les données réelles affichées ne sont pas automatiquement "
+            "intégrées aux probabilités historiques du modèle."
+        )
 
     else:
         st.info(
             "Clique sur « Charger les données détaillées réelles » "
             "pour charger les informations du match sélectionné."
         )
+
 
 st.divider()
 
