@@ -1444,6 +1444,7 @@ if matchs_api:
 
     
 
+
 details = st.session_state.get("details_highlightly")
 
 if (
@@ -1455,88 +1456,82 @@ if (
     match_id_selectionne = correspondances[choix].get("id")
     match_id_details = details.get("match_id")
 
-    
-if (
-    isinstance(details, dict)
-    and details
-    and matchs_api
-    and choix in correspondances
-):
-    match_id_selectionne = correspondances[choix].get("id")
-    match_id_details = details.get("match_id")
+    if str(match_id_details) == str(match_id_selectionne):
+        st.subheader("📊 Détails du match")
 
-    
-if str(match_id_details) == str(match_id_selectionne):
-    st.subheader("📊 Détails du match")
+        tab_match, tab_stats, tab_compos = st.tabs(
+            ["⚽ Fiche du match", "📈 Statistiques", "👥 Compositions"]
+        )
 
-    tab_match, tab_stats, tab_compos = st.tabs(
-        ["⚽ Fiche du match", "📈 Statistiques", "👥 Compositions"]
-    )
-
-    with tab_match:
-        if details.get("err_detail"):
-            st.warning(details["err_detail"])
-        elif details.get("detail"):
-            st.success("Fiche du match reçue.")
-            st.json(details["detail"])
-        else:
-            st.info("Fiche du match indisponible.")
-
-    with tab_stats:
-        if details.get("err_stats"):
-            st.warning(details["err_stats"])
-        else:
-            stats = details.get("stats")
-            if not stats:
-                st.info("Aucune statistique disponible.")
-            elif isinstance(stats, list) and not any(
-                item.get("statistics") for item in stats
-                if isinstance(item, dict)
-            ):
-                st.info(
-                    "Les données ont été reçues, mais les statistiques "
-                    "sont vides pour ce match."
-                )
+        with tab_match:
+            if details.get("err_detail"):
+                st.warning(details["err_detail"])
+            elif details.get("detail"):
+                st.json(details["detail"])
             else:
-                st.success("Statistiques disponibles.")
-                st.json(stats)
+                st.info("Fiche du match indisponible.")
 
-    with tab_compos:
-        if details.get("err_compos"):
-            st.warning(details["err_compos"])
-        else:
-            compos = details.get("compos")
-            equipes = []
-            if isinstance(compos, dict):
-                equipes = [
-                    compos.get("homeTeam") or {},
-                    compos.get("awayTeam") or {},
-                ]
-
-            compositions_disponibles = any(
-                equipe.get("initialLineup")
-                or equipe.get("substitutes")
-                for equipe in equipes
-            )
-
-            if not compositions_disponibles:
-                st.info(
-                    "Les compositions ne sont pas disponibles ou "
-                    "n'ont pas encore été publiées."
-                )
+        with tab_stats:
+            if details.get("err_stats"):
+                st.warning(details["err_stats"])
             else:
-                st.success("Données de composition reçues.")
-                st.json(compos)
+                stats = details.get("stats")
+                stats_remplies = (
+                    isinstance(stats, list)
+                    and any(
+                        isinstance(item, dict)
+                        and bool(item.get("statistics"))
+                        for item in stats
+                    )
+                )
 
-    st.caption(
-        "Les données absentes ne sont pas considérées comme confirmées "
-        "et ne modifient pas automatiquement les probabilités."
-    )
-else:
-    st.info(
-        "Clique sur « Charger les données détaillées réelles » "
-        "pour charger les informations du match sélectionné."
-    )
+                if stats_remplies:
+                    st.success("Statistiques disponibles.")
+                    st.json(stats)
+                else:
+                    st.info(
+                        "Aucune statistique exploitable n'est disponible "
+                        "pour ce match."
+                    )
+
+        with tab_compos:
+            if details.get("err_compos"):
+                st.warning(details["err_compos"])
+            else:
+                compos = details.get("compos")
+                equipes = []
+
+                if isinstance(compos, dict):
+                    equipes = [
+                        compos.get("homeTeam") or {},
+                        compos.get("awayTeam") or {},
+                    ]
+
+                compositions_disponibles = any(
+                    equipe.get("initialLineup")
+                    or equipe.get("substitutes")
+                    for equipe in equipes
+                )
+
+                if compositions_disponibles:
+                    st.success("Données de composition disponibles.")
+                    st.json(compos)
+                else:
+                    st.info(
+                        "Aucune composition exploitable n'est disponible "
+                        "ou les compositions n'ont pas encore été publiées."
+                    )
+
+        st.caption(
+            "Les données absentes ne sont pas considérées comme confirmées "
+            "et ne modifient pas automatiquement les probabilités."
+        )
+
+    else:
+        st.info(
+            "Les détails chargés correspondent à un autre match. "
+            "Recharge les données du match sélectionné."
+        )
 
 
 
