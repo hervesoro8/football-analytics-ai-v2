@@ -1443,6 +1443,7 @@ if matchs_api:
 
 
     
+
 details = st.session_state.get("details_highlightly")
 
 if (
@@ -1457,58 +1458,39 @@ if (
     if str(match_id_details) == str(match_id_selectionne):
         st.subheader("📊 Détails du match")
 
-        if details.get("detail") is not None:
-            st.markdown("### ⚽ Informations sur le match")
-            afficher_donnees_lisibles(details["detail"])
+        tab_match, tab_stats, tab_compos = st.tabs(
+            ["⚽ Fiche du match", "📈 Statistiques", "👥 Compositions"]
+        )
 
-        if details.get("stats") is not None:
-            st.markdown("### 📈 Statistiques")
-            afficher_donnees_lisibles(details["stats"])
+        with tab_match:
+            if details.get("err_detail"):
+                st.warning(details["err_detail"])
+            elif details.get("detail") is not None:
+                st.json(details["detail"])
+            else:
+                st.info("Aucune fiche détaillée reçue.")
 
-        if details.get("compos") is not None:
-            st.markdown("### 👥 Compositions des équipes")
-            afficher_donnees_lisibles(details["compos"])
+        with tab_stats:
+            if details.get("err_stats"):
+                st.warning(details["err_stats"])
+            elif details.get("stats") is not None:
+                st.json(details["stats"])
+            else:
+                st.info("Aucune statistique reçue.")
 
-        if not any(
-            details.get(cle) is not None
-            for cle in ("detail", "stats", "compos")
-        ):
-            st.info(
-                "Les données détaillées sont indisponibles pour ce match."
-            )
+        with tab_compos:
+            if details.get("err_compos"):
+                st.warning(details["err_compos"])
+            elif details.get("compos") is not None:
+                st.json(details["compos"])
+            else:
+                st.info("Aucune composition reçue.")
+
     else:
         st.info(
             "Clique sur « Charger les données détaillées réelles » "
             "pour charger les informations du match sélectionné."
         )
-
-    tab_match, tab_stats, tab_compos = st.tabs(
-        ["Fiche du match", "Statistiques", "Compositions"]
-    )
-
-    with tab_match:
-        if details.get("err_detail"):
-            st.info(details["err_detail"])
-        elif details.get("detail") is not None:
-            afficher_donnees_lisibles(details["detail"])
-        else:
-            st.info("Aucune fiche détaillée reçue.")
-
-    with tab_stats:
-        if details.get("err_stats"):
-            st.info(details["err_stats"])
-        elif details.get("stats") is not None:
-            afficher_donnees_lisibles(details["stats"])
-        else:
-            st.info("Aucune statistique reçue.")
-
-    with tab_compos:
-        if details.get("err_compos"):
-            st.info(details["err_compos"])
-        elif details.get("compos") is not None:
-            afficher_donnees_lisibles(details["compos"])
-        else:
-            st.info("Aucune composition reçue.")
 
 st.divider()
 
