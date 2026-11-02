@@ -1293,6 +1293,8 @@ else:
 matchs_api = st.session_state.get("matchs_highlightly", [])
 
 if matchs_api:
+    matchs_affiches = matchs_api
+    
     correspondances = {}
     lignes = []
 
