@@ -1604,7 +1604,7 @@ if st.button("Tester la récupération des matchs"):
         rep = requests.get(
             "https://v3.football.api-sports.io/fixtures",
             headers={"x-apisports-key": cle},
-            params={"next": 5},
+            params={"league": 39, "season": 2026},
             timeout=20,
         )
 
