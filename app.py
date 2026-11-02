@@ -1594,4 +1594,44 @@ st.caption(
     "Les données affichées dépendent de la couverture et des droits de l'API."
 )
 
+st.divider()
+st.header("⚽ Test des matchs API-Football")
+
+if st.button("Tester la récupération des matchs"):
+    cle = str(st.secrets.get("API_FOOTBALL_KEY", "")).strip()
+
+    try:
+        rep = requests.get(
+            "https://v3.football.api-sports.io/fixtures",
+            headers={"x-apisports-key": cle},
+            params={"next": 5},
+            timeout=20,
+        )
+
+        if rep.status_code == 200:
+            donnees = rep.json()
+            matchs = donnees.get("response", [])
+
+            if matchs:
+                st.success(f"{len(matchs)} matchs récupérés !")
+
+                for match in matchs:
+                    equipes = match.get("teams", {})
+                    domicile = equipes.get("home", {}).get("name", "Inconnu")
+                    exterieur = equipes.get("away", {}).get("name", "Inconnu")
+                    date_match = match.get("fixture", {}).get("date", "")
+
+                    st.write(f"⚽ {domicile} - {exterieur}")
+                    st.caption(date_match)
+            else:
+                st.warning("Connexion réussie, mais aucun match retourné.")
+
+        else:
+            st.error(f"Erreur HTTP : {rep.status_code}")
+            st.write(rep.text[:400])
+
+    except requests.RequestException as erreur:
+        st.error("Erreur de connexion.")
+        st.write(str(erreur))
+
 
