@@ -1293,7 +1293,32 @@ else:
 matchs_api = st.session_state.get("matchs_highlightly", [])
 
 if matchs_api:
-    matchs_affiches = matchs_api
+    noms_competitions = sorted({
+        (match.get("league") or {}).get(
+            "name", "Compétition inconnue"
+        )
+        for match in matchs_api
+    })
+
+    options_competitions = [
+        "Toutes les compétitions"
+    ] + noms_competitions
+
+    filtre_competition = st.selectbox(
+        "Filtrer les matchs par compétition",
+        options_competitions,
+        key="filtre_competition_highlightly",
+    )
+
+    if filtre_competition == "Toutes les compétitions":
+        matchs_affiches = matchs_api
+    else:
+        matchs_affiches = [
+            match for match in matchs_api
+            if (match.get("league") or {}).get(
+                "name", "Compétition inconnue"
+            ) == filtre_competition
+        ]
     
     correspondances = {}
     lignes = []
