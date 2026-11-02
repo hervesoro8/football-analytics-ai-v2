@@ -1296,7 +1296,7 @@ if matchs_api:
     correspondances = {}
     lignes = []
 
-    for match in matchs_api:
+    for match in matchs_affiches:
         domicile = match.get("homeTeam") or {}
         exterieur = match.get("awayTeam") or {}
         ligue_api = match.get("league") or {}
