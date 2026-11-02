@@ -1595,6 +1595,46 @@ st.caption(
 )
 
 st.divider()
+st.header("⚽ Diagnostic API-Football")
+
+if st.button("Analyser la réponse de l'API"):
+    cle = str(st.secrets.get("API_FOOTBALL_KEY", "")).strip()
+
+    try:
+        rep = requests.get(
+            "https://v3.football.api-sports.io/fixtures",
+            headers={"x-apisports-key": cle},
+            params={"league": 39, "season": 2026},
+            timeout=20,
+        )
+
+        st.write("Code HTTP :", rep.status_code)
+
+        donnees = rep.json()
+
+        st.write("Nombre de résultats :", donnees.get("results"))
+        st.write("Erreurs signalées :", donnees.get("errors"))
+        st.write("Pagination :", donnees.get("paging"))
+
+        matchs = donnees.get("response", [])
+
+        if matchs:
+            st.success(f"{len(matchs)} matchs récupérés !")
+
+            for match in matchs[:10]:
+                equipes = match.get("teams", {})
+                domicile = equipes.get("home", {}).get("name", "Inconnu")
+                exterieur = equipes.get("away", {}).get("name", "Inconnu")
+                date_match = match.get("fixture", {}).get("date", "")
+
+                st.write(f"⚽ {domicile} - {exterieur}")
+                st.caption(date_match)
+        else:
+            st.warning("Aucun match dans la réponse de l'API.")
+
+    except Exception as erreur:
+        st.error("Erreur pendant le diagnostic.")
+        st.write(str(erreur))
 st.header("⚽ Test des matchs API-Football")
 
 if st.button("Tester la récupération des matchs"):
