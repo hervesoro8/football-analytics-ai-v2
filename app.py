@@ -18,7 +18,59 @@ st.write(
     "Analyse statistique des équipes, forme récente et "
     "probabilités estimées."
 )
+st.divider()
+st.subheader("🔌 Test de connexion API-Football")
 
+if st.button("Tester API-Football"):
+    cle_api = str(
+        st.secrets.get("API_FOOTBALL_KEY", "")
+    ).strip()
+
+    if not cle_api:
+        st.error("La clé API-Football est introuvable.")
+    else:
+        try:
+            reponse = requests.get(
+                "https://v3.football.api-sports.io/status",
+                headers={"x-apisports-key": cle_api},
+                timeout=20,
+            )
+
+            if reponse.status_code == 200:
+                donnees = reponse.json()
+                erreurs = donnees.get("errors")
+
+                if erreurs:
+                    st.error("L'API a répondu avec une erreur.")
+                    st.write(erreurs)
+                else:
+                    infos = donnees.get("response", {})
+                    compte = infos.get("account", {})
+                    abonnement = infos.get("subscription", {})
+                    requetes = infos.get("requests", {})
+
+                    st.success("Connexion API-Football réussie !")
+
+                    st.write(
+                        "Abonnement :",
+                        abonnement.get("plan", "Non indiqué")
+                    )
+                    st.write(
+                        "Requêtes utilisées :",
+                        requetes.get("current", "Non indiqué")
+                    )
+                    st.write(
+                        "Limite de requêtes :",
+                        requetes.get("limit_day", "Non indiquée")
+                    )
+            else:
+                st.error(
+                    f"Réponse API : HTTP {reponse.status_code}"
+                )
+
+        except requests.RequestException as erreur:
+            st.error("Impossible de joindre API-Football.")
+            st.caption(str(erreur))
 LIGUES = {
     "Angleterre - Premier League": "E0",
     "Angleterre - Championship": "E1",
